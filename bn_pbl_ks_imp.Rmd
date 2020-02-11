@@ -22,7 +22,8 @@ bn_ks <- read.csv2("C:/Users/Cezary/Downloads/bn_ks_2010.csv", encoding = "UTF-8
   filter(grepl("Książki",X380,ignore.case = FALSE)|X380=="") %>%
   filter(grepl("\\$aWA|\\$aW ",X040)) %>%
   filter(X655!="\\7$aKomiks$2DBN") %>%
-  mutate(BN_URL = paste("https://katalogi.bn.org.pl/discovery/fulldisplay?docid=alma",as.character(X009),"&context=L&vid=48OMNIS_NLOP:48OMNIS_NLOP&lang=pl",sep = ""),
+  mutate(rok = str_sub(X008,8,11),
+         BN_URL = paste("https://katalogi.bn.org.pl/discovery/fulldisplay?docid=alma",as.character(X009),"&context=L&vid=48OMNIS_NLOP:48OMNIS_NLOP&lang=pl",sep = ""),
          BN_URL = str_replace(BN_URL,"88&","66&"))
 
 ### przenieść kolejnych autorów z 700 do pola 100
@@ -294,7 +295,7 @@ bn_ks <- bn_ks %>%
 #sprawdzić
 #jeśli obiekt bezpiecznik będzie miał jakiekolwiek wiersze, to oznacza, że w pliku "mapowanie_osob_bn_pbl" jest wiersz z twórcą, którego nie ma w bazie lub jego identyfikator jest błędny
 #jeśli obiekt bezpiecznik jest pusty - to wszystko okej
-# sprawdz czy id tworcy z ktorejs tabeli na dysku istnieje w bazie oracle, jesli nie, wklej id tworcy z oracla do tabeli
+# sprawdz czy id tworcy z ktorejs tabeli na dysku istnieje w bazie oracle, jesli nie, wklej id tworcy z oracla do tabeli. Następnie usuń kolumny osoba_bn_autor i osoba_bn_temat i uruchom chunk ponownie
 bezpiecznik <- bn_ks %>% 
   filter(osoba_bn_autor=="NA")
 ```
@@ -908,8 +909,7 @@ na_pozniej <- bn_ok %>%
   filter(kategorie_literackie=="nie") %>%
   mutate(lata = ifelse(grepl("\\d{2}-",X100),str_replace(X100,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA),
          lata_temat = ifelse(grepl("\\d{2}-",X600),str_replace(X600,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA)) %>%
-filter((is.na(lata)&is.na(lata_temat))|!(as.integer(lata)<1800)|!(as.integer(lata_temat)<1800)) %>%
-  select(id)
+filter((is.na(lata)&is.na(lata_temat))|!(as.integer(lata)<1800)|!(as.integer(lata_temat)<1800))
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
 write.csv2(na_pozniej, "C:/Users/Cezary/Desktop/bn_2010_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
