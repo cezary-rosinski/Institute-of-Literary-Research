@@ -15,8 +15,8 @@ jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Cezary/Downloads
 PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "IBL_SELECT", "CR333444")
 
 #wgranie zbiorów książek
-#aktualizacja - dopisać dodatkowe warunki (pobrać z tabelkizacji marca)
-bn_ks <- read.csv2("C:/Users/Cezary/Downloads/bn_ks_2009.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
+#aktualizacja - wprowadź właściwy rok do ścieżki
+bn_ks <- read.csv2("C:/Users/Cezary/Downloads/bn_ks_2010.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
   filter(!grepl("\\\\$aArtykuły|\\\\$Druki ulotne",X380)) %>%
   filter(!grepl("\\$aNadbitki i odbitki",X655)) %>%
   filter(grepl("Książki",X380,ignore.case = FALSE)|X380=="") %>%
@@ -90,7 +90,6 @@ drugi_autor <- drugi_autor %>%
 bn_ks <- bn_ks %>%
   mutate(X100 = drugi_autor$X100,
          X700 = drugi_autor$X700)
-
 ##koniec przenosin
 ```
 
@@ -110,11 +109,19 @@ pbl_viaf2 <- sheets_read(ss = "1_Bhwzo0xu4yTn8tF0ZNAZq9iIAqIxfcrjeLVCm_mggM") %>
          BN_name = str_replace_all(BN_name, "\\;\\|", "; ")) %>%
   cSplit(.,"BN_name",sep = "|",direction = "long") %>%
   filter(BN_name!="")
-#aktualizacja - dodaj adres tabeli z relacją bn i pbl dla twórców powstałych w ostatnim imporcie
-pbl_viaf <- rbind(pbl_viaf,pbl_viaf2) %>%
+
+pbl_viaf3 <- sheets_read(ss = "1L-7Zv9EyLr5FeCIY_s90rT5Hz6DjAScCx6NxfuHvoEQ") %>%
+  filter(czy_ten_sam!="nie") %>%
+  select(pbl_id, BN_id, BN_name) %>%
+  mutate(BN_name = str_replace_all(BN_name,"\\|\\(", " ("),
+         BN_name = str_replace_all(BN_name, "\\;\\|", "; ")) %>%
+  cSplit(.,"BN_name",sep = "|",direction = "long") %>%
+  filter(BN_name!="")
+
+pbl_viaf <- rbind(pbl_viaf,pbl_viaf2, pbl_viaf3) %>%
   arrange(pbl_id) %>%
   unique()
-remove(pbl_viaf2)
+remove(pbl_viaf2, pbl_viaf3)
 
 #zostawić do testowania, czy jedno hasło bn nie zasila kilku haseł twórców pbl
 #pbl_viaf <- sheets_read(ss = "1cEz73dGN2r2-TTc702yne9tKfH9PQ6UyAJ2zBSV6Jb0") %>%
@@ -287,6 +294,7 @@ bn_ks <- bn_ks %>%
 #sprawdzić
 #jeśli obiekt bezpiecznik będzie miał jakiekolwiek wiersze, to oznacza, że w pliku "mapowanie_osob_bn_pbl" jest wiersz z twórcą, którego nie ma w bazie lub jego identyfikator jest błędny
 #jeśli obiekt bezpiecznik jest pusty - to wszystko okej
+# sprawdz czy id tworcy z ktorejs tabeli na dysku istnieje w bazie oracle, jesli nie, wklej id tworcy z oracla do tabeli
 bezpiecznik <- bn_ks %>% 
   filter(osoba_bn_autor=="NA")
 ```
@@ -294,10 +302,10 @@ bezpiecznik <- bn_ks %>%
 ```{r dalsze przygotowanie zbioru do importu - UKD, słowa kluczowe, poloniki}
 #wskazanie interesujących PBL dziedzin wiedzy po UKD i określenie typu UKD
 bn_ks <- bn_ks %>%
-  mutate(dziedzina_PBL = ifelse(str_detect(X080,"(?<=\\$a|:|\\[|\\+|\\()(82)"),"ukd_lit",
+  mutate(dziedzina_PBL = ifelse(str_detect(X080,"(?<=\\$a|:|\\[|\\+|\\()(82|811\\.162)"),"ukd_lit",
                                 ifelse(str_detect(X080,"(?<=\\$a|:|\\[|\\+)(791)")|str_detect(X080,"(?<=\\$a|:)(792)")|str_detect(X080,"\\$a7\\.09"),"ukd_tfrtv",
                                        ifelse(str_detect(X080,"(?<=\\$a01)(\\(|\\/|2|4|5|9)")|str_detect(X080,"(?<=\\$a|\\[])(050)"),"ukd_biblio",
-                                              ifelse(str_detect(X080,"\\$a002")|str_detect(X080,"(?<=\\$a|:)(305)")|str_detect(X080,"(?<=\\$a39|:39)(\\(438\\)|8\\.2)")|str_detect(X080,"(?<=\\$a|:)(929[^\\.]051)"),"ukd_pogranicze","bez_ukd_PBL")))))
+                                              ifelse(str_detect(X080,"\\$a002")|str_detect(X080,"(?<=\\$a|:)(305)")|str_detect(X080,"(?<=\\$a39|:39)(\\(438\\)|8\\.2)")|str_detect(X080,"(?<=\\$a|:)(929[^\\.]051)")|str_detect(X080,"(?<=\\$a|:)(929[^\\.]052)"),"ukd_pogranicze","bez_ukd_PBL")))))
 #wskazanie interesujących PBL rekordów bez UKD, które są w kluczu PBL
 bez_ukd_ale_PBL <- bn_ks %>%
   select(id, X080, X650, X655, osoba_bn_autor, osoba_bn_temat, dziedzina_PBL) %>%
@@ -540,6 +548,8 @@ bn_ok <- sqldf("select *
 ```{r automatyczne usunięcie INO na podstawie wcześniejszych importów}
 #pobranie starych list książek z importu
 #aktualizacja - uzupełnij ostatni brakujący zaimportowany rocznik
+
+listy_2009 <- sheets_read(ss = "1Gc4gQSm9b4NDTQysiauzW9Jac6yP0oNuFbB8utO4kS4", sheet = "lista_ksiazek")
 listy_2005 <- sheets_read(ss = "1HkWkX61sQWktSXf0v0uPV8j2DwuTocesyCJuKTdisIU", sheet = "lista_ksiazek")
 listy_2006 <- sheets_read(ss = "1zeMx_Idsum8JmlM6G7Eufx9LxloHoAHv8V-My71VZf4", sheet = "lista_ksiazek")
 listy_2007 <- sheets_read(ss = "19iL7YoD8ug-rLnpzS6FD46aS2J1BRf4qL5VxllywCGE", sheet = "lista_ksiazek")
@@ -557,6 +567,8 @@ listy_2004 <- merge(listy_2004,do2004,by = "ZA_ZAPIS_ID",all.x = TRUE) %>%
   select(-ZA_STATUS_IMP) %>%
   select(pracownik,ZA_ZAPIS_ID,typ_ksiazki, link, link_1, rok, status, blad_w_imporcie_tytulu, X100, X245, X650, X655, X246, X250, X260, X300, X380, X490, X500, X501, X546, X600, X700, X041, X080)
 #zapewnienie tych samych nazw kolumn
+#aktualizacja - uzupełnij ostatni brakujący zaimportowany rocznik
+colnames(listy_2009) <- names(listy_2004)
 colnames(listy_2005) <- names(listy_2004)
 colnames(listy_2006) <- names(listy_2004)
 colnames(listy_2007) <- names(listy_2004)
@@ -573,7 +585,7 @@ zapisy <- RJDBC::dbGetQuery(PBL,
   mutate(pracownik_pbl = str_extract(ZA_UWAGI, "(?<=akceptuje:)([A-Z]*)")) %>%
   select(ZA_ZAPIS_ID,pracownik_pbl,ZA_STATUS_IMP)
 #aktualizacja - dodaj do skryptu listę z ostatnim brakującym zaimportowanym rocznikiem
-do_importu_NIE <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008) %>%
+do_importu_NIE <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009) %>%
   full_join(.,zapisy,by = "ZA_ZAPIS_ID") %>%
   select(X650,X655,ZA_STATUS_IMP) %>%
   mutate(X650 = str_remove_all(X650,"\\\\7"),
@@ -629,7 +641,7 @@ bn_ok <- sqldf("select *
 
 #czy próbować wyrzucać po UKD, które dostawało tylko INO?
 #aktualizacja - dodaj do skryptu listę z ostatnim brakującym zaimportowanym rocznikiem
-do_importu_NIE2 <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008) %>%
+do_importu_NIE2 <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009) %>%
   full_join(.,zapisy,by = "ZA_ZAPIS_ID") %>%
   select(X080,ZA_STATUS_IMP) %>%
   mutate(X080 = str_remove_all(X080,"\\\\")) %>%
@@ -727,7 +739,7 @@ rekordy_podmiotowe_stare <- dbGetQuery(PBL,
                                         where rz.rz_rodzaj_id=1
                                         and z.za_uwagi like '%import%'")
 #aktualizacja - dodaj do skryptu listę z ostatnim brakującym zaimportowanym rocznikiem
-gatunki_poprzednie_imp <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008) %>% 
+gatunki_poprzednie_imp <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009) %>% 
   filter(ZA_ZAPIS_ID %in% rekordy_podmiotowe_stare$ZA_ZAPIS_ID) %>% 
   mutate(X655 = ifelse(rok==2004,str_remove_all(str_replace_all(X655,"(\\$a)","\\\\#7\\1"),"#"),as.character(X655))) %>% 
   select(X655) %>% 
@@ -899,7 +911,7 @@ na_pozniej <- bn_ok %>%
 filter((is.na(lata)&is.na(lata_temat))|!(as.integer(lata)<1800)|!(as.integer(lata_temat)<1800)) %>%
   select(id)
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(na_pozniej, "C:/Users/Cezary/Desktop/bn_2009_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(na_pozniej, "C:/Users/Cezary/Desktop/bn_2010_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 bn_ok <- sqldf("select *
                from bn_ok a
@@ -1310,7 +1322,7 @@ zapisy <- RJDBC::dbGetQuery(PBL,
   select(-ZA_UWAGI)
 nazwy_lit_obcych <- str_replace_all(paste(PBL_literatury_obce$nazwa,collapse = "|"),"\\(","\\\\(")
 #aktualizacja - dodaj do skryptu listę z ostatnim brakującym zaimportowanym rocznikiem
-poprzednie_importy <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008) %>%
+poprzednie_importy <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009) %>%
   full_join(.,zapisy,by = "ZA_ZAPIS_ID") %>%
   select(ZA_ZAPIS_ID,X650,X655,DZ_DZIAL_ID,DZ_NAZWA,RZ_RODZAJ_ID,RZ_NAZWA,pracownik_pbl,ZA_STATUS_IMP) %>%
   mutate(X650 = str_remove_all(X650,"\\\\7"),
@@ -3325,7 +3337,7 @@ automatyczny_IOK <- polaczone %>%
   filter(rekord_BN %notin% data$ZA_UWAGI[data$czy_automatycznie=="nie"]) %>%
   mutate(powinno_byc = "IOK")
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(automatyczny_IOK, "C:/Users/Cezary/Desktop/imp_2009_automatyczne_podmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(automatyczny_IOK, "C:/Users/Cezary/Desktop/imp_2010_automatyczne_podmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 out <- cSplit(polaczone, c("am_autor_id", "am_nazwisko", "am_imie","os_osoba_id","os_nazwisko", "os_imie", "fo_symbol","wy_wydawnictwo_id","wy_miejsce","wy_nazwa"),sep = "|",direction = "long") %>%
   unique()
@@ -3434,7 +3446,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2009_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2010_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -4414,7 +4426,7 @@ automatyczny_IOK <- polaczone %>%
   filter(rekord_BN %notin% data$ZA_UWAGI[data$czy_automatycznie=="nie"]) %>%
   mutate(powinno_byc = "IOK")
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(automatyczny_IOK, "C:/Users/Cezary/Desktop/imp_2009_automatyczne_przedmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(automatyczny_IOK, "C:/Users/Cezary/Desktop/imp_2010_automatyczne_przedmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 out <- cSplit(polaczone, c("am_autor_id", "am_nazwisko", "am_imie","os_osoba_id","os_nazwisko", "os_imie", "fo_symbol","wy_wydawnictwo_id","wy_miejsce","wy_nazwa"),sep = "|",direction = "long") %>%
   unique()
@@ -4523,7 +4535,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2009_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2010_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -5501,7 +5513,7 @@ automatyczny_IOK <- polaczone %>%
   filter(rekord_BN %notin% data$ZA_UWAGI[data$czy_automatycznie=="nie"]) %>%
   mutate(powinno_byc = "IOK")
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(automatyczny_IOK, "C:/Users/Cezary/Desktop/imp_2009_automatyczne_antologie.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(automatyczny_IOK, "C:/Users/Cezary/Desktop/imp_2010_automatyczne_antologie.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 out <- cSplit(polaczone, c("am_autor_id", "am_nazwisko", "am_imie","os_osoba_id","os_nazwisko", "os_imie", "fo_symbol","wy_wydawnictwo_id","wy_miejsce","wy_nazwa"),sep = "|",direction = "long") %>%
   unique()
@@ -5610,7 +5622,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2009_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2010_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -6582,7 +6594,7 @@ x <- 1:length(rodzaje)
 for (i in x) {
   progress(match(i,x), max.value = length(x))
   nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>% 
-    bind_rows(.,read.csv2(paste("C:/Users/Cezary/Desktop/imp_2009_automatyczne_",rodzaje[i],".csv",sep = ""), encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE))
+    bind_rows(.,read.csv2(paste("C:/Users/Cezary/Desktop/imp_2010_automatyczne_",rodzaje[i],".csv",sep = ""), encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE))
 }
 #aktualizacja - wpisać w selecie dla za_uwagi właściwą frazę dla rocznika, np. '%2010~%'
 nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
@@ -6590,13 +6602,13 @@ nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
   left_join(.,dbGetQuery(PBL,
                              "select z.za_zapis_id, z.za_status_imp, z.za_uwagi
                               from pbl_zapisy z
-                              where za_uwagi like '%2020%'
+                              where za_uwagi like '%2010~%'
                               and z.za_url_bn is not null") %>% mutate(ZA_UWAGI = str_extract(ZA_UWAGI,"(?<=BN: )(.*?)(?=, import)")),by=c("rekord_BN"="ZA_UWAGI")) %>% 
   rename(jest = ZA_STATUS_IMP) %>% 
   mutate(ID2 = NA) %>% 
   select(ZA_ZAPIS_ID,ID2,jest,powinno_byc)
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Cezary/Desktop/2009_nadpisanie_zapisow_IOK.xlsx",sheetName = "ZA_STATUS_IMP")
+write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Cezary/Desktop/2010_nadpisanie_zapisow_IOK.xlsx",sheetName = "ZA_STATUS_IMP")
 
 #automatyczny IOK dla nowych twórców w kartotece
 #aktualizacja - wpisać w selecie dla tw_uwagi właściwą frazę dla rocznika, np. '%2010~%'
@@ -6604,12 +6616,12 @@ nadpisanie_tworcow_IOK <- dbGetQuery(PBL,
                                      "select tw.tw_tworca_id
                                       from IBL_OWNER.pbl_tworcy tw
                                       --where tw.tw_numer_bn like '%2010~%'
-                                      where tw.tw_uwagi like '%2020%'") %>% 
+                                      where tw.tw_uwagi like '%2010~%'") %>% 
   mutate(ID2 = NA,
          jest = "IMP",
          powinno_byc = "IOK")
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(nadpisanie_tworcow_IOK, "C:/Users/Cezary/Desktop/2009_nadpisanie_tworcow_IOK.xlsx",sheetName = "TW_STATUS")
+write.xlsx(nadpisanie_tworcow_IOK, "C:/Users/Cezary/Desktop/2010_nadpisanie_tworcow_IOK.xlsx",sheetName = "TW_STATUS")
 #automatycznie nadpisać rekordy bibliograficzne i kartoteczne przed kolejnym krokiem
 ```
 
@@ -6622,14 +6634,14 @@ kolejnosc <- c("pracownik","ZA_ZAPIS_ID","typ_ksiazki","link","link_1","rok","st
 rocznik_pbl_po_imporcie <- dbGetQuery(PBL,
                                        "select z.za_zapis_id, z.za_status_imp, z.za_uwagi
                                         from pbl_zapisy z
-                                        where za_uwagi like '%2020%'
+                                        where za_uwagi like '%2010~%'
                                         and z.za_url_bn is not null") %>% 
   mutate(ZA_UWAGI = str_extract(ZA_UWAGI,"(?<=BN: )(.*?)(?=, import)")) %>%
   rename(status = ZA_STATUS_IMP) %>% 
   left_join(.,bn_ok %>% select(pracownik = redaktor_dzialu,typ_ksiazki = rodzaj_ksiazki,link = BN_URL, rok, X100, X245, X650, X655, X246, X250, X260, X300, X380, X490, X500, X501, X546, X600, X700, X041, X080,ZA_UWAGI) %>% mutate(link_1 = paste("=HYPERLINK(\"",link,"\";\"link do książki w BN\")",sep = ""), blad_w_imporcie_tytulu = FALSE, ZA_UWAGI = paste(rok,sprintf("%05d", as.integer(ZA_UWAGI)),sep = "~")),by="ZA_UWAGI") %>% 
   select(noquote(kolejnosc))
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Cezary/Desktop/ks_BN_2009_listy_pracowników.xlsx",sheetName = "listy_pracownikow")
+write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Cezary/Desktop/ks_BN_2010_listy_pracowników.xlsx",sheetName = "listy_pracownikow")
 #prześlij listę na dysk, przygotuj widoki filtrów dla wszystkich osób i roześlij unikatowe linki
 ```
 
