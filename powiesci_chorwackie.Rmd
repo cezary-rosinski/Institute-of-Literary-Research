@@ -1,0 +1,442 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+  word_document: default
+---
+
+1. Downloading file from Polish National Library database. Editing in MarcEdit: tools->marc processing tools -> marc split. Dividing for 200000 records and process.
+2. Marc tools -> MarcBreaker and change from .mrc to .mrk; set default character encoding to UTF-8 (30 seconds per a text file that can be uploaded to R)
+3. For loop in R (need to divide for a smaller parts)
+
+
+```{r BN marc processing to table}
+options(java.parameters = "-Xmx32000m")
+options(scipen = 999)
+pacman::p_load(plyr,stringr,tidyverse,reshape2,zoo,sqldf,splitstackshape,dplyr,svMisc,googlesheets4)
+`%notin%` <- Negate(`%in%`)
+
+# przetwarzanie BN
+data_full <- data.frame(stringsAsFactors = FALSE)
+x <- 1:34
+
+#download database in pieces
+for (i in x) {
+progress(match(i,x), max.value = length(x))
+b <- sprintf("%02d", i-1)
+path1 <- "C:/Users/User/Desktop/bn_all/msplit000000"
+path2 <- b
+path3 <- ".mrk8"
+path <- paste(path1,path2,path3,sep = "")
+
+path <- "C:/Users/User/Desktop/bn_all/test.txt"
+bn1 <- readLines(path, encoding = "UTF-8")
+data1 <- data.frame(bn1)
+remove(bn1)
+data1 <- data1 %>%
+  mutate(czy = grepl("^\\=LDR",bn1),
+         row = ifelse(grepl("^\\=LDR",bn1),seq.int(nrow(data1)),NA)) %>%
+  filter(bn1!="") %>%
+  fill(row) %>%
+  mutate(id = ifelse(grepl("^\\=009",bn1),str_replace_all(bn1,"(^\\=009 .*?\\w)(.*?)($)","\\2"),NA)) %>%
+  group_by(row) %>%
+  fill(id) %>%
+  fill(id,.direction = "up") %>%
+  ungroup() %>%
+  ##wydobycie danych dla konkretnego roku ========== trzeba ręcznie zdefiniować rok
+  mutate(rok = ifelse(grepl("^\\=008",bn1),str_sub(bn1,14,17),NA)) %>%
+  group_by(row) %>%
+  fill(rok) %>%
+  fill(rok,.direction = "up") %>%
+  ungroup() %>%
+  filter(rok == 2010) %>%#TUTAJ
+  select(-rok) %>%
+  select(-2,-3) %>%
+  mutate(field = str_replace_all(bn1, "(=)(\\w{3})(.*)", "\\2"),
+         content = str_replace_all(bn1,"(=)(\\w{3})(\\s{2})(.*)","\\4")) %>%
+  select(2,3,4) %>%
+  mutate(id_field = paste(id,field,sep = "|"))
+if (nrow(data1)>0) {
+  count <- data1 %>%
+    select(4,3)
+  count <- as.data.frame(table(count$id_field))
+  data1 <- data1 %>%
+    left_join(.,count,by=c("id_field"="Var1"))
+  remove(count)
+  
+  data1_to_join <- data1 %>%
+    filter(Freq > 1) %>%
+    group_by(id_field) %>%
+    mutate(content = paste(content, collapse="|")) %>%
+    ungroup() %>%
+    unique() %>%
+    mutate(id = str_replace_all(id_field,"(.*)(\\|)(.*)", "\\1"),
+           field = str_replace_all(id_field,"(.*)(\\|)(.*)", "\\3")) %>%
+    select(-Freq)
+
+  data1 <- data1 %>%
+    filter(id_field %notin% data1_to_join$id_field) %>%
+    bind_rows(.,data1_to_join) %>%
+    arrange(id_field,field) %>%
+    select(1,2,3)
+
+  remove(data1_ok)
+  remove(data1_to_join)
+
+  data_full <- data_full %>%
+    bind_rows(.,data1)
+} 
+}
+data_full_table <- dcast(data_full, id ~ field, value.var="content")
+write.csv2(data_full_table, file = "C:/Users/User/Desktop/bn_books_2010.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+
+```
+
+```{r table of records for a perticular year}
+bn1 <- read.csv2("C:/Users/User/Desktop/bn_all_1.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) 
+bn2 <- read.csv2("C:/Users/User/Desktop/bn_all_2.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) 
+bn3 <- read.csv2("C:/Users/User/Desktop/bn_all_3.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) 
+
+bn1 <- dcast(bn1, id ~ field, value.var="content")
+bn2 <- dcast(bn2, id ~ field, value.var="content")
+bn3 <- dcast(bn3, id ~ field, value.var="content")
+
+fields <- intersect(intersect(colnames(bn1),colnames(bn2)),colnames(bn3))
+
+bn1 <- bn1 %>%
+  select(fields) %>%
+  mutate(rok = str_sub(`008`,8,11)) %>%
+  filter(rok == 2009)
+bn2 <- bn2 %>%
+  select(fields) %>%
+  mutate(rok = str_sub(`008`,8,11)) %>%
+  filter(rok == 2009)
+bn3 <- bn3 %>%
+  select(fields) %>%
+  mutate(rok = str_sub(`008`,8,11)) %>%
+  filter(rok == 2009)
+
+bn_ks <- rbind(bn1,bn2,bn3) %>%
+  mutate(czy_ks = (grepl("Książki", `380`,ignore.case = TRUE)|is.na(`380`))&substr(LDR,7,8)=="am") %>%
+  filter(czy_ks == TRUE) %>%
+  select(-czy_ks) %>%
+  unique()
+
+write.csv2(bn_ks, file = "C:/Users/User/Desktop/bn_ks_2009.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+
+#END
+
+```
+
+
+```{r }
+
+
+
+data_full <- rbind(bn1,bn2,bn3)
+
+write.csv2(data_full, file = "C:/Users/User/Desktop/bn_data_all.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+data_full <- read.csv2("C:/Users/User/Desktop/bn_kartoteka_wzorcowa.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) 
+
+f.agg <- function(x) paste(x, collapse = "~")
+data_full <- dcast(data_full, id ~ field, value.var="content", fun.aggregate = f.agg)
+
+data_full2 <- dcast(data_full, id ~ field, value.var="content")
+str_replace(data_full2$id,"(^.*?)(\\~.*?$)","\\1")
+reshape2::dcast()
+data_full2
+write.csv2(data_full, file = "C:/Users/User/Desktop/bn_data_all_table.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+
+```
+
+```{r ogarnianie kartoteki wzorcowe}
+data_full2 <- data_full2 %>%
+  select(-`665<U+2028>`)
+
+data_full2$id <- str_replace(data_full2$id,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`001` <- str_replace(data_full2$`001`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`005` <- str_replace(data_full2$`005`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`008` <- str_replace(data_full2$`008`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`009` <- str_replace(data_full2$`009`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`010` <- str_replace(data_full2$`010`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`020` <- str_replace(data_full2$`020`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`022` <- str_replace(data_full2$`022`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`024` <- str_replace(data_full2$`024`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`034` <- str_replace(data_full2$`034`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`035` <- str_replace(data_full2$`035`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`040` <- str_replace(data_full2$`040`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`043` <- str_replace(data_full2$`043`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`045` <- str_replace(data_full2$`045`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`046` <- str_replace(data_full2$`046`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`072` <- str_replace(data_full2$`072`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`080` <- str_replace(data_full2$`080`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`100` <- str_replace(data_full2$`100`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`110` <- str_replace(data_full2$`110`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`111` <- str_replace(data_full2$`111`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`130` <- str_replace(data_full2$`130`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`150` <- str_replace(data_full2$`150`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`151` <- str_replace(data_full2$`151`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`155` <- str_replace(data_full2$`155`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`368` <- str_replace(data_full2$`368`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`370` <- str_replace(data_full2$`370`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`371` <- str_replace(data_full2$`371`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`372` <- str_replace(data_full2$`372`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`373` <- str_replace(data_full2$`373`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`374` <- str_replace(data_full2$`374`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`375` <- str_replace(data_full2$`375`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`376` <- str_replace(data_full2$`376`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`377` <- str_replace(data_full2$`377`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`378` <- str_replace(data_full2$`378`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`382` <- str_replace(data_full2$`382`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`388` <- str_replace(data_full2$`388`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`400` <- str_replace(data_full2$`400`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`410` <- str_replace(data_full2$`410`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`411` <- str_replace(data_full2$`411`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`430` <- str_replace(data_full2$`430`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`450` <- str_replace(data_full2$`450`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`451` <- str_replace(data_full2$`451`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`455` <- str_replace(data_full2$`455`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`500` <- str_replace(data_full2$`500`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`510` <- str_replace(data_full2$`510`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`511` <- str_replace(data_full2$`511`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`530` <- str_replace(data_full2$`530`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`550` <- str_replace(data_full2$`550`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`551` <- str_replace(data_full2$`551`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`555` <- str_replace(data_full2$`555`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`640` <- str_replace(data_full2$`640`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`641` <- str_replace(data_full2$`641`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`642` <- str_replace(data_full2$`642`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`643` <- str_replace(data_full2$`643`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`665` <- str_replace(data_full2$`665`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`666` <- str_replace(data_full2$`666`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`670` <- str_replace(data_full2$`670`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`675` <- str_replace(data_full2$`675`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`680` <- str_replace(data_full2$`680`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$`682` <- str_replace(data_full2$`682`,"(^.*?)(\\~.*?$)","\\1")
+data_full2$LDR <- str_replace(data_full2$LDR,"(^.*?)(\\~.*?$)","\\1")
+write.csv2(data_full2, file = "C:/Users/User/Desktop/bn_kartoteka_wzorcowa.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+
+```
+
+2. Przygotowanie list książek dla danego roku
+
+```{r wydobycie list ksiazek}
+data_full <- read.csv2("C:/Users/User/Desktop/bn_data_all_table.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE)
+data_full <- mutate(data_full,
+                rok = str_sub(data_full$X008,8,11))
+data_full <- data_full %>%
+  filter(rok>2003&rok<2009)
+write.csv2(data_full, file = "C:/Users/User/Desktop/bn_data_2004-2008.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+bn_ks <- mutate(data_full,
+                czy_ks = (grepl("Ksi??ki", data_full$X380,ignore.case = TRUE)|data_full$X380=="")&substr(data_full$LDR,7,8)=="am")
+bn_ks <- bn_ks %>%
+  filter(czy_ks==TRUE) %>%
+  select(-length(bn_ks)) %>%
+  unique()
+test <- sqldf("select X245, X260,X380,X300,LDR
+              from bn_ks a")
+write.csv2(bn_ks, file = "C:/Users/User/Desktop/bn_ks_2004-2008.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+bn_ks <- read.csv2("C:/Users/User/Desktop/bn_ks_2004-2008.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) 
+
+
+bn_ks_2005_2008 <- bn_ks %>%
+  filter(rok>2004&rok<2009)
+
+#UKD_lit
+UKD_lit <- mutate(bn_ks_2005_2008,
+                  ukd_lit = grepl("\\$a8", bn_ks_2005_2008$X080))
+UKD_lit <- UKD_lit %>%
+  filter(ukd_lit == TRUE)
+
+#gat_lit_bez_UKD_lit
+gatunki_litX655 <- data.frame(X655 = UKD_lit$X655) %>%
+  unique() %>%
+  filter(!is.na(X655))
+gatunki_litX655$X655 <-str_replace_all(gatunki_litX655$X655,"(^|\\|)","~\\1")
+gatunki_litX655 <- cSplit(gatunki_litX655,"X655",sep = "~",direction = "long")
+gatunki_litX655 <- gatunki_litX655%>%
+  filter(X655!="")
+gatunki_litX655$X655 <- str_replace_all(gatunki_litX655$X655,"(.*?)(\\$a.*)(\\$2.*)","\\2")
+gatunki_litX655 <- gatunki_litX655 %>%
+  unique()
+gatunki_litX655 <- data.frame(gatunki = gatunki_litX655$X655, pole = "X655")
+
+gatunki_litX650 <- data.frame(X650 = UKD_lit$X650) %>%
+  unique() %>%
+  filter(!is.na(X650))
+gatunki_litX650$X650 <-str_replace_all(gatunki_litX650$X650,"(^|\\|)","~\\1")
+gatunki_litX650 <- cSplit(gatunki_litX650,"X650",sep = "~",direction = "long")
+gatunki_litX650 <- gatunki_litX650%>%
+  filter(X650!="")
+gatunki_litX650$X650 <- str_replace_all(gatunki_litX650$X650,"(.*?)(\\$a.*)(\\$2.*)","\\2")
+gatunki_litX650 <- gatunki_litX650 %>%
+  unique()
+gatunki_litX650 <- data.frame(gatunki = gatunki_litX650$X650, pole = "X650")
+
+gatunki_lit <- rbind(gatunki_litX655,gatunki_litX650)
+
+gatunki_lit$gatunki <- str_remove_all(gatunki_lit$gatunki, ".*?\\$a")
+gatunki_lit <- gatunki_lit[order(gatunki_lit$pole,gatunki_lit$gatunki),]
+gatunki_lit <- gatunki_lit %>%
+  unique()
+#write.csv2(gatunki_lit, "C:/Users/User/Desktop/gatunki_literackie.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+#Basia definiuje, kt?re gatunki s? literackie i kt?rych gatunk?w nale?y szuka?
+
+gatunki_lit <- gs_read(gs_title("gatunki_literackie_2005-2008"), ws = "gatunki_literackie")
+gatunki_lit <- gatunki_lit %>%
+  filter(`czy_gat_literacki?`=="tak")
+gatunki_lit <- gatunki_lit %>%
+  select(1,2) %>%
+  unique()
+bez_UKD_lit <- sqldf("select *
+               from bn_ks_2005_2008 a
+               where a.id not in 
+               (select b.id
+               from UKD_lit b)")
+gatunki_lit_1 <- gatunki_lit %>%
+  filter(pole=="X655") %>%
+  select(1)
+gatunki_lit_2 <- gatunki_lit %>%
+  filter(pole=="X650") %>%
+  select(1)
+
+bez_UKD_lit_a <- sqldf("select *
+                          from bez_UKD_lit a
+                          join gatunki_lit_1 b on a.X655 like ('%'||b.gatunki||'%')")
+bez_UKD_lit_b <- sqldf("select *
+                          from bez_UKD_lit a
+                          join gatunki_lit_2 b on a.X650 like ('%'||b.gatunki||'%')")
+
+bez_UKD_lit <- sqldf("select *
+                      from bez_UKD_lit a
+                      where a.id in (select a.id from bez_UKD_lit_a a)
+                      or a.id in (select a.id from bez_UKD_lit_b a)")
+bez_UKD_lit <-bez_UKD_lit[order(bez_UKD_lit$X655,bez_UKD_lit$X600),]
+
+#UKD_tfrtv
+UKD_tfrtv <- mutate(bn_ks_2005_2008,
+                    ukd_tfrtv = grepl("\\$a7\\.01", bn_ks_2005_2008$X080)|grepl("\\$a7\\.03", bn_ks_2005_2008$X080)|grepl("\\$a7\\.03\\(438\\)\\(091\\)", bn_ks_2005_2008$X080)|grepl("\\$a7\\.07", bn_ks_2005_2008$X080)|grepl("\\$a7\\.096", bn_ks_2005_2008$X080)|grepl("\\$a7\\.097", bn_ks_2005_2008$X080)|grepl("\\$a79", bn_ks_2005_2008$X080)|grepl("\\$a791", bn_ks_2005_2008$X080)|grepl("\\$a791\\.4", bn_ks_2005_2008$X080)|grepl("\\$a792", bn_ks_2005_2008$X080)|grepl("\\$a792\\.071", bn_ks_2005_2008$X080)|grepl("\\$a792\\.09", bn_ks_2005_2008$X080))
+UKD_tfrtv <- UKD_tfrtv %>%
+  filter(ukd_tfrtv == TRUE) %>%
+  select(-length(UKD_tfrtv))
+UKD_tfrtv <- sqldf("select *
+               from UKD_tfrtv a
+               where a.id not in 
+               (select b.id
+               from bez_UKD_lit b)
+               and a.id not in 
+               (select b.id
+               from UKD_lit b)")
+
+#bez_UKD_tfrtv
+gatunki_tfrtvX655 <- data.frame(X655 = UKD_tfrtv$X655) %>%
+  unique() %>%
+  filter(!is.na(X655))
+
+gatunki_tfrtvX655$X655<-str_replace_all(gatunki_tfrtvX655$X655,"(^|\\|)","~\\1")
+gatunki_tfrtvX655<- cSplit(gatunki_tfrtvX655,"X655",sep = "~",direction = "long")
+gatunki_tfrtvX655<- gatunki_tfrtvX655%>%
+  filter(X655!="")
+gatunki_tfrtvX655$X655 <- str_replace_all(gatunki_tfrtvX655$X655,"(.*?)(\\$a.*)(\\$2.*)","\\2")
+gatunki_tfrtvX655 <- gatunki_tfrtvX655 %>%
+  unique()
+gatunki_tfrtvX655 <- data.frame(gatunki = gatunki_tfrtvX655$X655, pole = "X655")
+
+gatunki_tfrtvX650 <- data.frame(X650 = UKD_lit$X650) %>%
+  unique() %>%
+  filter(!is.na(X650))
+gatunki_tfrtvX650$X650 <-str_replace_all(gatunki_tfrtvX650$X650,"(^|\\|)","~\\1")
+gatunki_tfrtvX650 <- cSplit(gatunki_tfrtvX650,"X650",sep = "~",direction = "long")
+gatunki_tfrtvX650 <- gatunki_tfrtvX650%>%
+  filter(X650!="")
+gatunki_tfrtvX650$X650 <- str_replace_all(gatunki_tfrtvX650$X650,"(.*?)(\\$a.*)(\\$2.*)","\\2")
+gatunki_tfrtvX650 <- gatunki_tfrtvX650 %>%
+  unique()
+gatunki_tfrtvX650 <- data.frame(gatunki = gatunki_tfrtvX650$X650, pole = "X650")
+
+gatunki_tfrtv <- rbind(gatunki_tfrtvX655,gatunki_tfrtvX650)
+
+gatunki_tfrtv$gatunki <- str_remove_all(gatunki_tfrtv$gatunki, ".*?\\$a")
+gatunki_tfrtv <- gatunki_tfrtv[order(gatunki_tfrtv$pole,gatunki_tfrtv$gatunki),]
+gatunki_tfrtv <- gatunki_tfrtv %>%
+  unique()
+
+#write.csv2(gatunki_tfrtv, "C:/Users/User/Desktop/gatunki_tfrtv.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+#Basia definiuje, kt?re gatunki s? tfrtv i kt?rych gatunk?w nale?y szuka?
+
+gatunki_tfrtv <- gs_read(gs_title("gatunki_tfrtv_2005-2008"), ws = "gatunki_tfrtv")
+gatunki_tfrtv <- gatunki_tfrtv %>%
+  filter(`czy_gat_tfrtv?`=="tak")
+gatunki_tfrtv <- gatunki_tfrtv %>%
+  select(1,2) %>%
+  unique()
+bez_UKD_tfrtv <- sqldf("select *
+               from bn_ks_2005_2008 a
+               where a.id not in 
+               (select b.id
+               from UKD_tfrtv b)
+               and a.id not in 
+               (select b.id
+               from bez_UKD_lit b)
+               and a.id not in 
+               (select b.id
+               from UKD_lit b)")
+
+gatunki_tfrtv_1 <- gatunki_tfrtv %>%
+  filter(pole=="X655") %>%
+  select(1)
+gatunki_tfrtv_2 <- gatunki_tfrtv %>%
+  filter(pole=="X650") %>%
+  select(1)
+
+bez_UKD_tfrtv_a <- sqldf("select *
+                          from bez_UKD_tfrtv a
+                          join gatunki_tfrtv_1 b on a.X655 like ('%'||b.gatunki||'%')")
+bez_UKD_tfrtv_b <- sqldf("select *
+                          from bez_UKD_tfrtv a
+                          join gatunki_tfrtv_2 b on a.X650 like ('%'||b.gatunki||'%')")
+
+bez_UKD_tfrtv <- sqldf("select *
+                      from bez_UKD_tfrtv a
+                      where a.id in (select a.id from bez_UKD_tfrtv_a a)
+                      or a.id in (select a.id from bez_UKD_tfrtv_b a)")
+bez_UKD_tfrtv <-bez_UKD_tfrtv[order(bez_UKD_tfrtv$X655,bez_UKD_tfrtv$X600),]
+
+#reszta
+reszta <- sqldf("select *
+               from bn_ks_2005_2008 a
+               where a.id not in 
+               (select b.id
+               from UKD_lit b)
+               and a.id not in 
+               (select b.id
+               from bez_UKD_lit b)
+               and a.id not in 
+               (select b.id
+               from UKD_tfrtv b)
+               and a.id not in 
+               (select b.id
+               from bez_UKD_tfrtv b)")
+#po??czenie z baz? PBL
+Sys.setenv(JAVA_HOME='C:\\Program Files\\Java\\jdk1.8.0_191\\jre')
+library(RJDBC)
+jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:\\Users\\User\\Documents\\PBL\\ojdbc6.jar")
+PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "IBL_SELECT", "CR333444")
+install.packages("pingr")
+library(pingr)
+
+gwiazdkowicze <- dbGetQuery(PBL,
+                            "select *
+                            from PBL_TWORCY tw where tw_.dbReadTable(PBL,'PBL_DZIALY')
+
+
+
+
+write.csv2(UKD_lit, "C:/Users/User/Desktop/2005-2008_UKD_lit.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(bez_UKD_lit, "C:/Users/User/Desktop/2005-2008_bez_UKD_lit.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(UKD_tfrtv, "C:/Users/User/Desktop/2005-2008_UKD_tfrtv.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(bez_UKD_tfrtv, "C:/Users/User/Desktop/2005-2008_bez_UKD_tfrtv.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(reszta, "C:/Users/User/Desktop/2005-2008_reszta.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+
+```
