@@ -22,7 +22,9 @@ bn_ks <- read.csv2("C:/Users/Cezary/Downloads/bn_ks_2009.csv", encoding = "UTF-8
   filter(grepl("Książki",X380,ignore.case = FALSE)|X380=="") %>%
   filter(grepl("\\$aWA|\\$aW ",X040)) %>%
   filter(X655!="\\7$aKomiks$2DBN") %>%
-  mutate(BN_URL = paste("https://katalogi.bn.org.pl/discovery/fulldisplay?docid=alma",as.character(X009),"&context=L&vid=48OMNIS_NLOP:48OMNIS_NLOP&lang=pl",sep = ""),
+  mutate(rok = str_sub(X008,8,11),
+         X245 = str_replace_all(X245," \\/ \\$c"," /$c"),
+         BN_URL = paste("https://katalogi.bn.org.pl/discovery/fulldisplay?docid=alma",as.character(X009),"&context=L&vid=48OMNIS_NLOP:48OMNIS_NLOP&lang=pl",sep = ""),
          BN_URL = str_replace(BN_URL,"88&","66&"))
 
 ### przenieść kolejnych autorów z 700 do pola 100
@@ -287,6 +289,7 @@ bn_ks <- bn_ks %>%
 #sprawdzić
 #jeśli obiekt bezpiecznik będzie miał jakiekolwiek wiersze, to oznacza, że w pliku "mapowanie_osob_bn_pbl" jest wiersz z twórcą, którego nie ma w bazie lub jego identyfikator jest błędny
 #jeśli obiekt bezpiecznik jest pusty - to wszystko okej
+# sprawdz czy id tworcy z ktorejs tabeli na dysku istnieje w bazie oracle, jesli nie, wklej id tworcy z oracla do tabeli. Następnie usuń kolumny osoba_bn_autor i osoba_bn_temat i uruchom chunk ponownie
 bezpiecznik <- bn_ks %>% 
   filter(osoba_bn_autor=="NA")
 ```
@@ -294,10 +297,10 @@ bezpiecznik <- bn_ks %>%
 ```{r dalsze przygotowanie zbioru do importu - UKD, słowa kluczowe, poloniki}
 #wskazanie interesujących PBL dziedzin wiedzy po UKD i określenie typu UKD
 bn_ks <- bn_ks %>%
-  mutate(dziedzina_PBL = ifelse(str_detect(X080,"(?<=\\$a|:|\\[|\\+|\\()(82)"),"ukd_lit",
+  mutate(dziedzina_PBL = ifelse(str_detect(X080,"(?<=\\$a|:|\\[|\\+|\\()(82|811\\.162)"),"ukd_lit",
                                 ifelse(str_detect(X080,"(?<=\\$a|:|\\[|\\+)(791)")|str_detect(X080,"(?<=\\$a|:)(792)")|str_detect(X080,"\\$a7\\.09"),"ukd_tfrtv",
                                        ifelse(str_detect(X080,"(?<=\\$a01)(\\(|\\/|2|4|5|9)")|str_detect(X080,"(?<=\\$a|\\[])(050)"),"ukd_biblio",
-                                              ifelse(str_detect(X080,"\\$a002")|str_detect(X080,"(?<=\\$a|:)(305)")|str_detect(X080,"(?<=\\$a39|:39)(\\(438\\)|8\\.2)")|str_detect(X080,"(?<=\\$a|:)(929[^\\.]051)"),"ukd_pogranicze","bez_ukd_PBL")))))
+                                              ifelse(str_detect(X080,"\\$a002")|str_detect(X080,"(?<=\\$a|:)(305)")|str_detect(X080,"(?<=\\$a39|:39)(\\(438\\)|8\\.2)")|str_detect(X080,"(?<=\\$a|:)(929[^\\.]051)")|str_detect(X080,"(?<=\\$a|:)(929[^\\.]052)"),"ukd_pogranicze","bez_ukd_PBL")))))
 #wskazanie interesujących PBL rekordów bez UKD, które są w kluczu PBL
 bez_ukd_ale_PBL <- bn_ks %>%
   select(id, X080, X650, X655, osoba_bn_autor, osoba_bn_temat, dziedzina_PBL) %>%
@@ -896,8 +899,7 @@ na_pozniej <- bn_ok %>%
   filter(kategorie_literackie=="nie") %>%
   mutate(lata = ifelse(grepl("\\d{2}-",X100),str_replace(X100,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA),
          lata_temat = ifelse(grepl("\\d{2}-",X600),str_replace(X600,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA)) %>%
-filter((is.na(lata)&is.na(lata_temat))|!(as.integer(lata)<1800)|!(as.integer(lata_temat)<1800)) %>%
-  select(id)
+filter((is.na(lata)&is.na(lata_temat))|!(as.integer(lata)<1800)|!(as.integer(lata_temat)<1800))
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
 write.csv2(na_pozniej, "C:/Users/Cezary/Desktop/bn_2009_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
@@ -1104,12 +1106,78 @@ PBL_hasla_osobowe <- sheets_read(ss = "1zbwjnrtWGvbjrQTLMavJcWSu7HfP0I-USNgZ_KWi
 colnames(PBL_hasla_osobowe) <- c("DZ_DZIAL_ID","DZ_NAZWA","redaktor_dzialu","nazwa")
 ```
 
-```{r gotowy plik}
-blabla <- bn_ok
-bn_ok <- blabla
+```{r przygotowanie współwydań}
+# podzielenie unikatowych rekordów bn na dwa wiersze w tabeli, z których powstaną dwa rekordy pbl
+wspolwydania_fix <- bn_ok %>%
+  filter(rodzaj_ksiazki=="współwydanie") %>%
+  mutate(X245 = ifelse(grepl("\\]\\.[^$]",X245),str_replace(X245,"(\\$c)(.*)(\\]\\. )(.* \\/ .*)","\\1\\2]|10$a\\4"),str_replace(X245,"(\\$c)(.*?)(\\. )(.* \\/ .*)","\\1\\2|10$a\\4")),
+         X245 = str_replace_all(X245, "\\/[^\\$]", "/$c"))
 
-assign("last.warning", NULL, envir = baseenv())
+# usunięcie ze zbioru współwydawnictw (będą później połączone)
+bn_ok <- bn_ok %>% 
+  filter(id %notin% wspolwydania_fix$id)
 
+# usunięcie z pola X246 wersji tytułów, które nie są tytułami oryginału
+marc_field_246 <- wspolwydania_fix %>%
+  select(ZA_UWAGI,X246)%>%
+  mutate(X246=str_replace_all(X246,"(^|\\|)","~\\1"),
+         X246 = ifelse(X246=="~",as.character(X246),str_remove(X246,"^~"))) %>%
+  cSplit(.,"X246",sep = "~",direction = "long") %>%
+  mutate(X246=str_remove_all(X246,"^\\|")) %>%
+  mutate(indicator = str_replace_all(X246,"(^.*?)(\\$.*)","\\1"))
+subfield_list<- str_extract_all(wspolwydania_fix$X246,"\\$.")
+subfield_list<- unique(unlist(subfield_list))
+empty_table<- data.frame(matrix(ncol = length(subfield_list),nrow = lengths(marc_field_246)[1]))
+colnames(empty_table) <-subfield_list
+marc_field_246<-cbind(marc_field_246,empty_table)
+subfield_list_char <- paste("(",subfield_list,")",sep = "")
+subfield_list_char <- str_replace_all(subfield_list_char,"\\$","\\\\$")
+
+x <- 1:length(subfield_list)
+for (i in x) {
+  progress(match(i,x), max.value = length(x)) 
+  marc_field_246$X246 <- str_replace(marc_field_246$X246,subfield_list_char[i],"|\\1")
+}
+for (i in x) {
+  progress(match(i,x), max.value = length(x)) 
+  subfield_list_char2 <- str_replace_all(subfield_list,"\\$","\\\\$")
+  string_a <- "(^)(.*?\\|"
+  string_b <- subfield_list_char2[i]
+  string_c <- ")(.*?)(\\,{0,1})((\\|\\$)(.*)|$)"
+  string <- paste(string_a,string_b,string_c,sep = "")
+  marc_field_246[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_246$X246),str_replace_all(gsub(string,"\\3",marc_field_246$X246),"\\${2}.", "~"),NA)
+}
+
+marc_field_246 <- marc_field_246 %>% 
+  filter(is.na(`$i`)|`$i`!="Tyt. przekł.:") %>% 
+  select(ZA_UWAGI,X246) %>% 
+  mutate(X246 = str_remove_all(X246,"\\|")) %>% 
+  group_by(ZA_UWAGI) %>% 
+  mutate(X246 = paste(X246,collapse = "|")) %>% 
+  ungroup() %>% 
+  unique()
+
+wspolwydania_fix$X246 <- marc_field_246$X246
+
+# podział na dwa rekordy
+wspolwydania_fix <- wspolwydania_fix %>%
+  cSplit(c("X245", "X246"), sep = "|", direction = "long") %>% 
+  filter(!is.na(X245))
+
+# zmiana pola ZA_UWAGI na wartość unikatową
+wspolwydania_fix %$%  
+    { ZA_UWAGI==lag(ZA_UWAGI,)} %>% 
+    as.numeric() %>% 
+    {.} -> wspolwydania_fix$same
+wspolwydania_fix$same[1] <- 0
+wspolwydania_fix <- wspolwydania_fix %>% 
+  mutate(ZA_UWAGI = ifelse(same == 0, paste(ZA_UWAGI, "a", sep = ""), paste(ZA_UWAGI, "b", sep = ""))) %>% 
+  select(-same)
+
+# połączenie zbiorów
+bn_ok <- bn_ok %>% 
+  mutate(ZA_UWAGI = as.character(ZA_UWAGI)) %>% 
+  bind_rows(wspolwydania_fix)
 ```
 
 
@@ -2256,7 +2324,9 @@ kilka_literatur_nowego_tworcy <- bn_ok %>%
   ungroup() %>%
   unique() %>%
   filter(grepl("\\|",unikatowy_dzial)) %>%
-  select(-unikatowy_dzial) %>%
+  select(-unikatowy_dzial)
+if(nrow(kilka_literatur_nowego_tworcy)>0) {
+  kilka_literatur_nowego_tworcy <- kilka_literatur_nowego_tworcy %>%
   mutate(id_grupy = 1:nrow(.)) %>%
   cSplit(.,c("id","DZ_DZIAL_ID","DZ_NAZWA","redaktor_dzialu"),sep = "|",direction = "long")
 
@@ -2270,12 +2340,22 @@ for (i in x) {
   bn_ok$DZ_NAZWA[bn_ok$id==kilka_literatur_nowego_tworcy$id[i]] <- as.character(kilka_literatur_nowego_tworcy$DZ_NAZWA)[i]
   bn_ok$redaktor_dzialu[bn_ok$id==kilka_literatur_nowego_tworcy$id[i]] <- as.character(kilka_literatur_nowego_tworcy$redaktor_dzialu)[i]
 }
+}
+
+########## TUTAJ uzupełnić przydział dla współwydań (prawdopodobnie wystarczy zastosować schemat dla literatury podmiotowej - od mapowania twórców)
+# być może nie powinniśmy przy tworzeniu twórców bazować na polu X100 - sprawdzić, czy wcześniej wykorzystano pole X245
+
+
+
+
 #jeśli nie ma działu lub rodzaju zapisu, to wpisać id i nazwę do ustalenia
 bn_ok <- bn_ok %>%
-  mutate(DZ_DZIAL_ID =ifelse(is.na(DZ_DZIAL_ID),0,as.integer(DZ_DZIAL_ID)),
-         DZ_NAZWA = ifelse(is.na(DZ_NAZWA),"-- do ustalenia --",as.character(DZ_NAZWA)),
-         RZ_RODZAJ_ID =ifelse(is.na(RZ_RODZAJ_ID),0,as.integer(RZ_RODZAJ_ID)),
-         RZ_NAZWA = ifelse(is.na(RZ_NAZWA),"-- do ustalenia --",as.character(RZ_NAZWA)))
+  mutate(DZ_DZIAL_ID =ifelse(rodzaj_ksiazki!="współwydanie"&is.na(DZ_DZIAL_ID),0,as.integer(DZ_DZIAL_ID)),
+         DZ_NAZWA = ifelse(rodzaj_ksiazki!="współwydanie"&is.na(DZ_NAZWA),"-- do ustalenia --",as.character(DZ_NAZWA)),
+         RZ_RODZAJ_ID =ifelse(rodzaj_ksiazki!="współwydanie"&is.na(RZ_RODZAJ_ID),0,as.integer(RZ_RODZAJ_ID)),
+         RZ_NAZWA = ifelse(rodzaj_ksiazki!="współwydanie"&is.na(RZ_NAZWA),"-- do ustalenia --",as.character(RZ_NAZWA)))
+
+
 ```
 
 ```{r problemy}
@@ -5615,16 +5695,71 @@ for (i in x) {
 ```
 
 ```{r książki współwydania}
+#podzielenie unikatowych rekordów BN na dwa wiersze w tabeli (bo będą dwa rekordy PBL)
 data <- bn_ok %>%
   filter(rodzaj_ksiazki=="współwydanie") %>%
-  mutate(redaktor_dzialu = paste(redaktor_dzialu,"_wsp",sep = ""))
+  mutate(X245 = ifelse(grepl("\\]\\.[^$]",X245),str_replace(X245,"(\\$c)(.*)(\\]\\. )(.* \\/ .*)","\\1\\2]|10$a\\4"),str_replace(X245,"(\\$c)(.*?)(\\. )(.* \\/ .*)","\\1\\2|10$a\\4")),
+         X245 = str_replace_all(X245, "\\/[^\\$]", "/$c"))
+
+marc_field_246 <- data %>%
+  select(ZA_UWAGI,X246)%>%
+  mutate(X246=str_replace_all(X246,"(^|\\|)","~\\1"),
+         X246 = ifelse(X246=="~",as.character(X246),str_remove(X246,"^~"))) %>%
+  cSplit(.,"X246",sep = "~",direction = "long") %>%
+  mutate(X246=str_remove_all(X246,"^\\|")) %>%
+  mutate(indicator = str_replace_all(X246,"(^.*?)(\\$.*)","\\1"))
+subfield_list<- str_extract_all(data$X246,"\\$.")
+subfield_list<- unique(unlist(subfield_list))
+empty_table<- data.frame(matrix(ncol = length(subfield_list),nrow = lengths(marc_field_246)[1]))
+colnames(empty_table) <-subfield_list
+marc_field_246<-cbind(marc_field_246,empty_table)
+subfield_list_char <- paste("(",subfield_list,")",sep = "")
+subfield_list_char <- str_replace_all(subfield_list_char,"\\$","\\\\$")
+
+x <- 1:length(subfield_list)
+for (i in x) {
+  progress(match(i,x), max.value = length(x)) 
+  marc_field_246$X246 <- str_replace(marc_field_246$X246,subfield_list_char[i],"|\\1")
+}
+for (i in x) {
+  progress(match(i,x), max.value = length(x)) 
+  subfield_list_char2 <- str_replace_all(subfield_list,"\\$","\\\\$")
+  string_a <- "(^)(.*?\\|"
+  string_b <- subfield_list_char2[i]
+  string_c <- ")(.*?)(\\,{0,1})((\\|\\$)(.*)|$)"
+  string <- paste(string_a,string_b,string_c,sep = "")
+  marc_field_246[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_246$X246),str_replace_all(gsub(string,"\\3",marc_field_246$X246),"\\${2}.", "~"),NA)
+}
+
+marc_field_246 <- marc_field_246 %>% 
+  filter(is.na(`$i`)|`$i`!="Tyt. przekł.:") %>% 
+  select(ZA_UWAGI,X246) %>% 
+  mutate(X246 = str_remove_all(X246,"\\|")) %>% 
+  group_by(ZA_UWAGI) %>% 
+  mutate(X246 = paste(X246,collapse = "|")) %>% 
+  ungroup() %>% 
+  unique()
+
+data$X246 <- marc_field_246$X246
+
+data <- data %>%
+  cSplit(c("X245", "X246"), sep = "|", direction = "long") %>% 
+  filter(!is.na(X245))
+
+#przypisanie współwydania do redaktorów, działowanie i rodzajowanie zapisów
 
 
-data <- harlequiny
-data$X245 <- str_replace_all(data$X245, "\\]\\. ", "]|$a")
-data$X245 <- str_replace_all(data$X245, "\\/[^\\$]", "/$c")
-data <- cSplit(data, c("X245", "X246"), sep = "|", direction = "long")
-data <- data.frame(data, licznik = 1:length(data$id))
+
+
+
+
+
+
+
+
+#dodać:mutate(redaktor_dzialu = paste(redaktor_dzialu,"_wsp",sep = ""),
+
+
 
 #uwolnienie kolumn z danymi z bn i przetworzenie do PBL
 #1

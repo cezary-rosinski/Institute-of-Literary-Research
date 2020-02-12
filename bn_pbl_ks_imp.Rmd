@@ -2268,7 +2268,9 @@ kilka_literatur_nowego_tworcy <- bn_ok %>%
   ungroup() %>%
   unique() %>%
   filter(grepl("\\|",unikatowy_dzial)) %>%
-  select(-unikatowy_dzial) %>%
+  select(-unikatowy_dzial)
+if(nrow(kilka_literatur_nowego_tworcy)>0) {
+  kilka_literatur_nowego_tworcy <- kilka_literatur_nowego_tworcy %>%
   mutate(id_grupy = 1:nrow(.)) %>%
   cSplit(.,c("id","DZ_DZIAL_ID","DZ_NAZWA","redaktor_dzialu"),sep = "|",direction = "long")
 
@@ -2281,6 +2283,7 @@ for (i in x) {
   bn_ok$DZ_DZIAL_ID[bn_ok$id==kilka_literatur_nowego_tworcy$id[i]] <- kilka_literatur_nowego_tworcy$DZ_DZIAL_ID[i]
   bn_ok$DZ_NAZWA[bn_ok$id==kilka_literatur_nowego_tworcy$id[i]] <- as.character(kilka_literatur_nowego_tworcy$DZ_NAZWA)[i]
   bn_ok$redaktor_dzialu[bn_ok$id==kilka_literatur_nowego_tworcy$id[i]] <- as.character(kilka_literatur_nowego_tworcy$redaktor_dzialu)[i]
+}
 }
 #jeśli nie ma działu lub rodzaju zapisu, to wpisać id i nazwę do ustalenia
 bn_ok <- bn_ok %>%
