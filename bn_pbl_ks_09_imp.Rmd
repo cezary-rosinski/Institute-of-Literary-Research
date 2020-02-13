@@ -9,6 +9,7 @@ Przed rozpoczęciem pracy wyszukaj frazy "bezpiecznik" i "aktualizacja".
 options(java.parameters = "-Xmx32000m")
 options(scipen = 999)
 pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,arrangements,tokenizers,openxlsx)
+`%notin%` <- Negate(`%in%`)
 
 #połączenie z bazą PBL
 jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Cezary/Downloads/ojdbc6.jar")
@@ -537,7 +538,6 @@ ks_zabawki <- bn_ok %>%
 bn_ok <- sqldf("select *
                from bn_ok a
                where a.id not in (select b.id from ks_zabawki b)")
-
 ```
 
 ```{r automatyczne usunięcie INO na podstawie wcześniejszych importów}
@@ -752,8 +752,8 @@ gatunki_podmiotowe <- bn_ok %>%
 gatunki_podmiotowe <- str_replace_all(str_replace_all(paste(gatunki_podmiotowe$X655,collapse = "|"),"(.{2})(\\$a)","\\2"),"\\$","\\\\$")
 bn_ok$czy_podmiotowy <- grepl(gatunki_podmiotowe,bn_ok$X655)|grepl(gatunki_podmiotowe,bn_ok$X650)
 bn_ok <- bn_ok %>%
-  mutate(rodzaj_ksiazki = ifelse(str_count(X245, " / ")+1>2,"antologia",
-                                 ifelse(str_count(X245, " / ")+1==2,"współwydanie",
+  mutate(rodzaj_ksiazki = ifelse(str_count(X245, " \\/ ")+1>2,"antologia",
+                                 ifelse(str_count(X245, " \\/ \\[{0,1}[A-ZAÁÀÂÃÄĂĀÅĄÆEÉÈÊËĚĒĖĘIÍÌÎÏĪĮIOÓÒÔÕÖŐØŒUÚÙÛÜŰŪůYÝCĆČçDĎĐĐGĢĞKĶLŁĻNŃÑŇŅŊRŘSŚŠŞSßTŤŦÞŢ8ZŻŹŽ]")+1==2,"współwydanie",
                                         ifelse(rodzaj_ksiazki==""&czy_podmiotowy==TRUE&!grepl("xhistoria|xtematyka|xbiografia",X650)&!grepl("xhistoria|xtematyka|xbiografia",X655),"podmiotowa",
                                                ifelse(X100!=""&grepl("aPamiętnik|aLiteratura podróżnicza",X655)&!grepl("xhistoria|xtematyka|xbiografia",X650)&!grepl("xhistoria|xtematyka|xbiografia",X655),"podmiotowa",
                                                       ifelse(X100!=""&grepl("aReportaż",X655)&grepl("\\$y",X655)&!grepl("xhistoria|xtematyka|xbiografia",X650)&!grepl("xhistoria|xtematyka|xbiografia",X655),"podmiotowa",
@@ -1081,8 +1081,6 @@ PBL_autorzy <- dbReadTable(PBL,'PBL_AUTORZY') %>%
          nazwa = str_replace_all(str_to_lower(nazwa), "\\W", "")) %>%
   filter(nazwa != "nana")
 
-PBL_autor_to_tworca <- sheets_read(ss = "1RuyR3pZl4vNLprIqAWgiWfvG8EJhYGcLWb24J7VwrvA", sheet = "Arkusz1")
-
 PBL_wspoltworcy <- dbReadTable(PBL,'PBL_OSOBY') %>%
   mutate(nazwa_prosta = str_replace_all(str_to_lower(ifelse(is.na(OS_IMIE),as.character(OS_NAZWISKO),paste(OS_NAZWISKO,OS_IMIE, sep = ""))), "\\W", "")) %>%
   filter(nazwa_prosta !="nana")
@@ -1108,6 +1106,8 @@ colnames(PBL_hasla_osobowe) <- c("DZ_DZIAL_ID","DZ_NAZWA","redaktor_dzialu","naz
 
 ```{r przygotowanie współwydań}
 # podzielenie unikatowych rekordów bn na dwa wiersze w tabeli, z których powstaną dwa rekordy pbl
+bn_ok <- bn_ok %>%
+  mutate(ZA_UWAGI = 1:nrow(.))
 wspolwydania_fix <- bn_ok %>%
   filter(rodzaj_ksiazki=="współwydanie") %>%
   mutate(X245 = ifelse(grepl("\\]\\.[^$]",X245),str_replace(X245,"(\\$c)(.*)(\\]\\. )(.* \\/ .*)","\\1\\2]|10$a\\4"),str_replace(X245,"(\\$c)(.*?)(\\. )(.* \\/ .*)","\\1\\2|10$a\\4")),
@@ -1238,7 +1238,6 @@ marc_field_600 <- merge(marc_field_600,count,by.x = "id", by.y = "Var1") %>%
          RZ_NAZWA = "książka o twórcy (przedmiotowa)")
 
 ###przypisanie do redaktorów na podstawie literatury z pola 655
-`%notin%` <- Negate(`%in%`)
 przedmiotowa_redaktorzy <- bn_ok %>%
   filter(rodzaj_ksiazki=="przedmiotowa") %>%
   filter(id %notin% marc_field_600$id)
@@ -2285,11 +2284,262 @@ do_antologii4 <- antologie_redaktorzy %>%
   select(names(do_antologii1))
 
 do_antologii <- rbind(do_antologii1,do_antologii2,do_antologii3,do_antologii4)
-#połączenie przydziałów w jeden plik
+###przypisanie redaktora do współwydań na podstawie osoby z 245 jako twórcy (autora) (tabela pbl-bn-viaf)- książki twórcy
+wspolwydanie_redaktorzy <- bn_ok %>%
+  filter(rodzaj_ksiazki=="współwydanie")
+
+do_wspolwydania1 <- wspolwydanie_redaktorzy %>% 
+  select(ZA_UWAGI,X245) %>% 
+  mutate(X245 = str_extract(X245, "(?<=\\/\\$c)(.*?)(?= ;|$)"),
+         X245 = str_remove(X245,"\\.$"),
+         X245 = str_remove(X245,"\\["),
+         X245 = str_remove(X245,"\\]"),
+         nazwisko = ifelse(grepl(" [a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźž\\.]* ",X245),as.character(X245),str_replace(X245,"(^.*?)( )(?!.* )(.*$)","\\3")),
+         imie = ifelse(grepl(" [a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźž\\.]* ",X245),"*",str_replace(X245,"(^.*?)( )(?!.* )(.*$)","\\1")),
+         name = paste(nazwisko,imie,sep = ", ")) %>%
+  inner_join(.,pbl_viaf,by = c("name" = "BN_name")) %>%
+  left_join(.,PBL_tworcy,by = c("pbl_id"="TW_TWORCA_ID")) %>%
+  left_join(.,redaktorzy_dzialow,by = c("TW_DZ_DZIAL_ID"="DZ_DZIAL_ID")) %>%
+  select(ZA_UWAGI,TW_TWORCA_ID=pbl_id,TW_NAZWISKO,TW_IMIE,DZ_DZIAL_ID=TW_DZ_DZIAL_ID,DZ_NAZWA=DZ_NAZWA.x,redaktor_dzialu) %>%
+  mutate(RZ_RODZAJ_ID = 1,
+         RZ_NAZWA = "książka twórcy (podmiotowa)") %>%
+  unique()
+###przypisanie redaktora na podstawie zbieżności fraz nazewnictwa osoby z 245 z twórcą pbl (dla tych, które nie zostały zmapowane na linii pbl-bn) - książki twórcy
+wspolwydanie_redaktorzy <- bn_ok %>%
+  filter(rodzaj_ksiazki=="współwydanie") %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania1$ZA_UWAGI)
+
+do_wspolwydania2 <- wspolwydanie_redaktorzy %>% 
+  select(ZA_UWAGI,X245) %>% 
+  mutate(X245 = str_extract(X245, "(?<=\\/\\$c)(.*?)(?= ;|$)"),
+         X245 = str_remove(X245,"\\.$"),
+         X245 = str_remove(X245,"\\["),
+         X245 = str_remove(X245,"\\]"),
+         nazwisko = ifelse(grepl(" [a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźž\\.]* ",X245),as.character(X245),str_replace(X245,"(^.*?)( )(?!.* )(.*$)","\\3")),
+         imie = ifelse(grepl(" [a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźž\\.]* ",X245),"*",str_replace(X245,"(^.*?)( )(?!.* )(.*$)","\\1")),
+         name = paste(nazwisko,imie,sep = ", "),
+         nazwa = str_replace_all(str_to_lower(name), "\\W", "")) %>% 
+  inner_join(.,PBL_tworcy_podm %>% select(TW_TWORCA_ID,TW_NAZWISKO,TW_IMIE,DZ_DZIAL_ID=TW_DZ_DZIAL_ID,DZ_NAZWA,nazwa),by="nazwa")
+do_wspolwydania2$same <- cumsum(!duplicated(do_wspolwydania2[1:4]))
+do_wspolwydania2 <- do_wspolwydania2 %>% 
+  arrange(ZA_UWAGI,nazwisko,imie,nazwa,TW_TWORCA_ID)
+do_wspolwydania2 <- do_wspolwydania2[!duplicated(do_wspolwydania2$same),] %>% 
+  mutate(DZ_DZIAL_ID = as.integer(DZ_DZIAL_ID),
+         RZ_RODZAJ_ID = 1,
+         RZ_NAZWA = "książka twórcy (podmiotowa)") %>% 
+  inner_join(.,redaktorzy_dzialow %>% select(DZ_DZIAL_ID,redaktor_dzialu),by="DZ_DZIAL_ID") %>% 
+  select(names(do_wspolwydania1))
+###przypisanie autorów podmiotowej do literatur i przypisanie do redaktorów na podstawie kodu literatury z pola X080 i tworzenie nowych twórców na podstawie pola 245
+wspolwydanie_redaktorzy <- bn_ok %>%
+  filter(rodzaj_ksiazki=="współwydanie") %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania1$ZA_UWAGI) %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania2$ZA_UWAGI)
+
+wspolwydanie_redaktorzy <- sqldf("select *
+                            from wspolwydanie_redaktorzy a
+                            join BN_PBL_lista_literatur b on a.X080 like ('%'||b.ukd_ogolne||'%')")
+do_wspolwydania3 <- wspolwydanie_redaktorzy %>% 
+  select(ZA_UWAGI,X245,pbl_id,pbl_nazwa,redaktor_dzialu,pbl_id_literatury,pbl_literatura,nazwa_prosta,ukd_ogolne) %>% 
+  mutate(X245 = str_extract(X245, "(?<=\\/\\$c)(.*?)(?= ;|$)"),
+         X245 = str_remove(X245,"\\.$"),
+         X245 = str_remove(X245,"\\["),
+         X245 = str_remove(X245,"\\]"),
+         nazwisko = ifelse(grepl(" [a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźž\\.]* ",X245),as.character(X245),str_replace(X245,"(^.*?)( )(?!.* )(.*$)","\\3")),
+         imie = ifelse(grepl(" [a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźž\\.]* ",X245),"*",str_replace(X245,"(^.*?)( )(?!.* )(.*$)","\\1")),
+         name = paste(nazwisko,imie,sep = ", ")) %>%
+  mutate(pbl_nazwa = as.character(pbl_nazwa)) %>%
+  mutate(DZ_DZIAL_ID = ifelse(nazwa_prosta=="polsk"&substr(pbl_nazwa,nchar(pbl_nazwa),nchar(pbl_nazwa))!=substr(nazwisko,1,1),NA,as.integer(pbl_id))) %>%
+  filter(!is.na(DZ_DZIAL_ID)) %>%
+  arrange(ZA_UWAGI,DZ_DZIAL_ID)
+count <- as.data.frame(table(do_wspolwydania3$ZA_UWAGI))
+do_wspolwydania3 <- merge(do_wspolwydania3,count,by.x = "ZA_UWAGI",by.y = "Var1") %>%
+  mutate(dlugosc = nchar(ukd_ogolne)) %>%
+  arrange(-Freq,ZA_UWAGI,-dlugosc,pbl_id)
+do_wspolwydania3$same <- cumsum(!duplicated(do_wspolwydania3[1]))
+do_wspolwydania3 <- do_wspolwydania3[!duplicated(do_wspolwydania3$same),] %>%
+  mutate(TW_TWORCA_ID = NA) %>%
+  rename(DZ_NAZWA = pbl_nazwa,
+         TW_NAZWISKO = nazwisko,
+         TW_IMIE = imie) %>%
+  select(ZA_UWAGI,TW_TWORCA_ID,TW_NAZWISKO,TW_IMIE,DZ_DZIAL_ID,DZ_NAZWA,redaktor_dzialu) %>%
+  mutate(RZ_RODZAJ_ID = 1,
+         RZ_NAZWA = "książka twórcy (podmiotowa)")
+###przypisanie autorów podmiotowej do literatur i przypisanie do redaktorów na podstawie literatury z pola 655 i tworzenie nowych twórców na podstawie pola 245
+wspolwydanie_redaktorzy <- bn_ok %>%
+  filter(rodzaj_ksiazki=="współwydanie") %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania1$ZA_UWAGI) %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania2$ZA_UWAGI) %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania3$ZA_UWAGI)
+
+#655
+marc_field_655 <- wspolwydanie_redaktorzy %>%
+  select(ZA_UWAGI,X655)%>%
+  filter(X655!="") %>%
+  mutate(X655=str_replace_all(X655,"(^|\\|)","~\\1")) %>%
+  cSplit(.,"X655",sep = "~",direction = "long") %>%
+  filter(X655!="") %>%
+  mutate(X655=str_remove_all(X655,"^\\|")) %>%
+  mutate(indicator = str_replace_all(X655,"(^.*?)(\\$.*)","\\1"))
+subfield_list<- str_extract_all(wspolwydanie_redaktorzy$X655,"\\$.")
+subfield_list<- unique(unlist(subfield_list))
+empty_table<- data.frame(matrix(ncol = length(subfield_list),nrow = lengths(marc_field_655)[1]))
+colnames(empty_table) <-subfield_list
+marc_field_655<-cbind(marc_field_655,empty_table)
+subfield_list_char <- paste("(",subfield_list,")",sep = "")
+subfield_list_char <- str_replace_all(subfield_list_char,"\\$","\\\\$")
+
+x <- 1:length(subfield_list)
+for (i in x) {
+  progress(match(i,x), max.value = length(x)) 
+  marc_field_655$X655 <- str_replace(marc_field_655$X655,subfield_list_char[i],"|\\1")
+}
+for (i in x) {
+  progress(match(i,x), max.value = length(x)) 
+  subfield_list_char2 <- str_replace_all(subfield_list,"\\$","\\\\$")
+  string_a <- "(^)(.*?\\|"
+  string_b <- subfield_list_char2[i]
+  string_c <- ")(.*?)(\\,{0,1})((\\|\\$)(.*)|$)"
+  string <- paste(string_a,string_b,string_c,sep = "")
+  marc_field_655[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_655$X655),str_replace_all(gsub(string,"\\3",marc_field_655$X655),"\\${2}.", "~"),NA)
+}
+
+marc_field_655 <- marc_field_655 %>%
+  select(ZA_UWAGI,`$a`) %>%
+  unique()
+
+marc_field_655 <- sqldf("select *
+                            from marc_field_655 a
+                            left join PBL_hasla_osobowe b on a.`$a` like ('%'||b.nazwa||'%')")
+
+###dodawanie nazewnictw nowych twórców na podstawie 245
+marc_field_245 <- wspolwydanie_redaktorzy %>% 
+  select(ZA_UWAGI,X245) %>% 
+  mutate(X245 = str_extract(X245, "(?<=\\/\\$c)(.*?)(?= ;|$)"),
+         X245 = str_remove(X245,"\\.$"),
+         X245 = str_remove(X245,"\\["),
+         X245 = str_remove(X245,"\\]"),
+         nazwisko = ifelse(grepl(" [a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźž\\.]* ",X245),as.character(X245),str_replace(X245,"(^.*?)( )(?!.* )(.*$)","\\3")),
+         imie = ifelse(grepl(" [a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźž\\.]* ",X245),"*",str_replace(X245,"(^.*?)( )(?!.* )(.*$)","\\1")),
+         name = paste(nazwisko,imie,sep = ", "))
+#join na podstawie identycznego id
+marc_field_655 <- marc_field_655 %>%
+  left_join(.,marc_field_245,by="ZA_UWAGI") %>%
+  mutate(DZ_DZIAL_ID = ifelse(nazwa=="polsk"&substr(DZ_NAZWA,nchar(DZ_NAZWA),nchar(DZ_NAZWA))!=substr(nazwisko,1,1),NA,as.integer(DZ_DZIAL_ID))) %>%
+  filter(!is.na(DZ_DZIAL_ID)) %>%
+  arrange(ZA_UWAGI,DZ_DZIAL_ID)
+marc_field_655$same <- cumsum(!duplicated(marc_field_655[1]))
+do_wspolwydania4 <- marc_field_655[!duplicated(marc_field_655$same),] %>%
+  select(ZA_UWAGI,DZ_DZIAL_ID,DZ_NAZWA,TW_NAZWISKO=nazwisko,TW_IMIE=imie,redaktor_dzialu) %>%
+  filter(!is.na(DZ_DZIAL_ID)) %>%
+  mutate(TW_TWORCA_ID = NA,
+         RZ_RODZAJ_ID = 1,
+         RZ_NAZWA = "książka twórcy (podmiotowa)") %>%
+  select(names(do_wspolwydania3))
+###przypisanie autorów podmiotowej do literatur i przypisanie do redaktorów na podstawie literatury z pola 650 i tworzenie nowych twórców na podstawie pola 245
+wspolwydanie_redaktorzy <- bn_ok %>%
+  filter(rodzaj_ksiazki=="współwydanie") %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania1$ZA_UWAGI) %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania2$ZA_UWAGI) %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania3$ZA_UWAGI) %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania4$ZA_UWAGI)
+
+#650
+marc_field_650 <- wspolwydanie_redaktorzy %>%
+  select(ZA_UWAGI,X650)%>%
+  filter(X650!="") %>%
+  mutate(X650=str_replace_all(X650,"(^|\\|)","~\\1")) %>%
+  cSplit(.,"X650",sep = "~",direction = "long") %>%
+  filter(X650!="") %>%
+  mutate(X650=str_remove_all(X650,"^\\|")) %>%
+  mutate(indicator = str_replace_all(X650,"(^.*?)(\\$.*)","\\1"))
+subfield_list<- str_extract_all(wspolwydanie_redaktorzy$X650,"\\$.")
+subfield_list<- unique(unlist(subfield_list))
+empty_table<- data.frame(matrix(ncol = length(subfield_list),nrow = lengths(marc_field_650)[1]))
+colnames(empty_table) <-subfield_list
+marc_field_650<-cbind(marc_field_650,empty_table)
+subfield_list_char <- paste("(",subfield_list,")",sep = "")
+subfield_list_char <- str_replace_all(subfield_list_char,"\\$","\\\\$")
+
+x <- 1:length(subfield_list)
+for (i in x) {
+  progress(match(i,x), max.value = length(x)) 
+  marc_field_650$X650 <- str_replace(marc_field_650$X650,subfield_list_char[i],"|\\1")
+}
+for (i in x) {
+  progress(match(i,x), max.value = length(x)) 
+  subfield_list_char2 <- str_replace_all(subfield_list,"\\$","\\\\$")
+  string_a <- "(^)(.*?\\|"
+  string_b <- subfield_list_char2[i]
+  string_c <- ")(.*?)(\\,{0,1})((\\|\\$)(.*)|$)"
+  string <- paste(string_a,string_b,string_c,sep = "")
+  marc_field_650[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_650$X650),str_replace_all(gsub(string,"\\3",marc_field_650$X650),"\\${2}.", "~"),NA)
+}
+
+marc_field_650 <- marc_field_650 %>%
+  select(ZA_UWAGI,`$a`) %>%
+  unique()
+
+marc_field_650 <- sqldf("select *
+                            from marc_field_650 a
+                            left join PBL_hasla_osobowe b on a.`$a` like ('%'||b.nazwa||'%')")  %>%
+  left_join(.,marc_field_245,by="ZA_UWAGI") %>%
+  mutate(DZ_DZIAL_ID = ifelse(nazwa=="polsk"&substr(DZ_NAZWA,nchar(DZ_NAZWA),nchar(DZ_NAZWA))!=substr(nazwisko,1,1),NA,as.integer(DZ_DZIAL_ID))) %>%
+  filter(!is.na(DZ_DZIAL_ID)) %>%
+  arrange(ZA_UWAGI,DZ_DZIAL_ID)
+
+marc_field_650$same <- cumsum(!duplicated(marc_field_650[1]))
+do_wspolwydania5 <- marc_field_650[!duplicated(marc_field_650$same),] %>%
+  select(ZA_UWAGI,DZ_DZIAL_ID,DZ_NAZWA,TW_NAZWISKO=nazwisko,TW_IMIE=imie,redaktor_dzialu) %>%
+  filter(!is.na(DZ_DZIAL_ID)) %>%
+  mutate(TW_TWORCA_ID = NA,
+         RZ_RODZAJ_ID = 1,
+         RZ_NAZWA = "książka twórcy (podmiotowa)") %>%
+  select(names(do_wspolwydania4))
+#co zostało do współwydania?
+wspolwydanie_redaktorzy <- bn_ok %>%
+  filter(rodzaj_ksiazki=="współwydanie") %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania1$ZA_UWAGI) %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania2$ZA_UWAGI) %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania3$ZA_UWAGI) %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania4$ZA_UWAGI) %>% 
+  filter(ZA_UWAGI %notin% do_wspolwydania5$ZA_UWAGI)
+
+#naddatek przypisać Gosi jako podmiotową bez twórców i czy_automatycznie <- nie
+do_wspolwydania6 <- wspolwydanie_redaktorzy %>%
+  mutate(TW_TWORCA_ID = NA,
+         TW_NAZWISKO = NA,
+         TW_IMIE = NA,
+         DZ_DZIAL_ID = NA,
+         DZ_NAZWA = NA,
+         RZ_RODZAJ_ID = 1,
+         RZ_NAZWA = "książka twórcy (podmiotowa)",
+         redaktor_dzialu = "GOSIAx") %>%
+  select(names(do_wspolwydania5))
+#trzeba zaktualizować w bn_ok, że teraz to nie są automatyczne
+lista_do_przepisania <- do_wspolwydania6$ZA_UWAGI
+bn_ok$czy_automatycznie[bn_ok$ZA_UWAGI %in% lista_do_przepisania] <- "nie"
+#połączenie przydziału współwydań w jeden plik
+do_wspolwydania <- rbind(do_wspolwydania1,do_wspolwydania2,do_wspolwydania3,do_wspolwydania4,do_wspolwydania5,do_wspolwydania6)
+
+#połączenie przydziałów w jeden plik (z wykluczeniem współwydania, bo ono idzie po za_uwagi)
 redaktorzy_zapisow <- rbind(do_podmiotowej,do_przedmiotowej,do_antologii)
-#połączenie przypisania ze zbiorem 
+#połączenie przypisania ze zbiorem
+
+
+
+
+
+
+
+
+#TUTAJ#
+#wszystko wskazuje na to, że dla całości będzie trzeba zmienić id na ZA_UWAGI, żeby poniższy join zadziałał
+
+
+
 bn_ok <- bn_ok %>%
   left_join(.,redaktorzy_zapisow,by="id") %>%
+  left_join(.,do_wspolwydania,by="ZA_UWAGI") %>%
   mutate(redaktor_dzialu = ifelse(is.na(DZ_NAZWA),as.character(redaktor_dzialu),
                                   ifelse(DZ_NAZWA=="Hasła osobowe (literatura polska) - B","PAULINA",
                                          ifelse(DZ_NAZWA=="Hasła osobowe (literatura polska) - G","MARTAK",
@@ -2306,8 +2556,6 @@ bn_ok <- bn_ok %>%
                                                                                                                       ifelse(DZ_NAZWA=="Hasła osobowe (literatura polska) - X","PAULINA",
                                                                                                                              ifelse(DZ_NAZWA=="Hasła osobowe (literatura polska) - V","PAULINA",
                                                                                                                                     ifelse(DZ_NAZWA=="Hasła osobowe (literatura polska) - Y","PAULINA",as.character(redaktor_dzialu))))))))))))))))))
-bn_ok <- bn_ok %>%
-  mutate(ZA_UWAGI = 1:nrow(.))
 
 #ujednolicenie literatury dla kilku zapisów nowego twórcy
 kilka_literatur_nowego_tworcy <- bn_ok %>%
@@ -2341,12 +2589,6 @@ for (i in x) {
   bn_ok$redaktor_dzialu[bn_ok$id==kilka_literatur_nowego_tworcy$id[i]] <- as.character(kilka_literatur_nowego_tworcy$redaktor_dzialu)[i]
 }
 }
-
-########## TUTAJ uzupełnić przydział dla współwydań (prawdopodobnie wystarczy zastosować schemat dla literatury podmiotowej - od mapowania twórców)
-# być może nie powinniśmy przy tworzeniu twórców bazować na polu X100 - sprawdzić, czy wcześniej wykorzystano pole X245
-
-
-
 
 #jeśli nie ma działu lub rodzaju zapisu, to wpisać id i nazwę do ustalenia
 bn_ok <- bn_ok %>%
