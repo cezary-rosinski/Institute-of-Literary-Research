@@ -3,6 +3,7 @@ title: "R Notebook"
 output: html_notebook
 ---
 UWAGA!
+Przed rozpoczęciem pracy zaktualizuj zgodnie z obecnym stanem bazy listę książek na dysku za poprzedni rocznik.
 Przed rozpoczęciem pracy wyszukaj frazy "bezpiecznik" i "aktualizacja".
 ```{r Wczytanie plików}
 #biblioteki
@@ -306,13 +307,23 @@ bn_ks <- bn_ks %>%
 bez_ukd_ale_PBL <- bn_ks %>%
   select(id, X080, X650, X655, osoba_bn_autor, osoba_bn_temat, dziedzina_PBL) %>%
   filter(dziedzina_PBL == "bez_ukd_PBL"&X080==""&is.na(osoba_bn_autor)&is.na(osoba_bn_temat)) %>%
-  mutate(bez_ukd_ale_PBL = grepl("literat|literac|pisar|bajk|dramat|epigramat|esej|felieton|film|komedi|nowel|opowiadani|pamiętnik|poemiks|poezj|powieść|proza|reportaż|satyr|wspomnieni|Scenariusze zajęć|Podręczniki dla gimnazjów|teatr|Nagrod|aforyzm|baśń|baśnie|polonijn|dialogi|fantastyka naukowa|legend|pieśń|poemat|przypowieś|honoris causa|filologi|kino polskie|pieśni",X650, ignore.case = TRUE)|grepl("literat|literac|pisar|bajk|dramat|epigramat|esej|felieton|film|komedi|nowel|opowiadani|pamiętnik|poemiks|poezj|powieść|proza|reportaż|satyr|wspomnieni|Scenariusze zajęć|Podręczniki dla gimnazjów|teatr|Nagrod|aforyzm|baśń|baśnie|polonijn|dialogi|fantastyka naukowa|legend|pieśń|poemat|przypowieś|honoris causa|filologi|kino polskie|pieśni",X655,ignore.case = TRUE)) %>%
+  mutate(bez_ukd_ale_PBL = grepl("literat|literac|pisar|bajk|dramat|epigramat|esej|felieton|film|komedi|nowel|opowiadani|pamiętnik|poemiks|poezj|powieść|proza|reportaż|satyr|wspomnieni|Scenariusze zajęć|Podręczniki dla gimnazjów|teatr|Nagrod|aforyzm|baśń|baśnie|polonijn|dialogi|fantastyka naukowa|legend|pieśń|poemat|przypowieś|honoris causa|filologi|kino polskie|pieśni|interpretacj",X650, ignore.case = TRUE)|grepl("literat|literac|pisar|bajk|dramat|epigramat|esej|felieton|film|komedi|nowel|opowiadani|pamiętnik|poemiks|poezj|powieść|proza|reportaż|satyr|wspomnieni|Scenariusze zajęć|Podręczniki dla gimnazjów|teatr|Nagrod|aforyzm|baśń|baśnie|polonijn|dialogi|fantastyka naukowa|legend|pieśń|poemat|przypowieś|honoris causa|filologi|kino polskie|pieśni|interpretacj",X655,ignore.case = TRUE)) %>%
   filter(bez_ukd_ale_PBL == TRUE) %>%
   select(id) %>%
   mutate(bez_ukd_ale_PBL = "tak")
 
 bn_ks <- bn_ks %>%
   full_join(.,bez_ukd_ale_PBL,by = "id")
+
+#Biblia
+biblia <- bn_ks %>% 
+  filter(grepl("biblia", X630, ignore.case = TRUE), 
+         grepl("analiza i interpretacja|edycja krytyczna|materiały konferencyjne", X655, ignore.case = TRUE)) %>% 
+  select(id) %>% 
+  mutate(czy_biblia = "tak")
+
+bn_ks <- bn_ks %>%
+  full_join(biblia,by = "id")
 
 #wspomnienia,pamiętniki,literatura podróżnicza,reportaż
 wspomnienia <- bn_ks %>%
@@ -330,7 +341,8 @@ rekordy_slowa <- sqldf("select *
                    or LOWER(a.X245) like ('%'||'literac'||'%')
                    or LOWER(a.X245) like ('%'||'teatr'||'%')
                    or LOWER(a.X245) like ('%'||'film'||'%')
-                   or LOWER(a.X245) like ('%'||'dramat'||'%')") %>%
+                   or LOWER(a.X245) like ('%'||'dramat'||'%')
+                   or LOWER(a.X245) like ('%'||'interpretacj'||'%')") %>%
   select(id) %>%
   mutate(slowa_literackie = "tak") %>%
   unique()
@@ -338,7 +350,7 @@ bn_ks <- bn_ks %>%
   full_join(.,rekordy_slowa,by = "id")
 
 bn_ok <- bn_ks %>%
-  filter(!((is.na(osoba_bn_autor)&is.na(osoba_bn_temat))&dziedzina_PBL=="bez_ukd_PBL"&is.na(bez_ukd_ale_PBL)&is.na(czy_wspomnienia_reportaz)&is.na(slowa_literackie)))
+  filter(!((is.na(osoba_bn_autor)&is.na(osoba_bn_temat))&dziedzina_PBL=="bez_ukd_PBL"&is.na(bez_ukd_ale_PBL)&is.na(czy_wspomnienia_reportaz)&is.na(slowa_literackie)&is.na(czy_biblia)))
 
 #czy tu usunąć zdublowane isbny?
 #020
@@ -459,7 +471,7 @@ duble_ksiazek$id_grupy_dubli <- cumsum(!duplicated(duble_ksiazek$id_grupy_dubli)
 #uzupełnienie całego zbioru o informację o dublu, wydobycie dubli do osobnego pliku i usuniecie ich z głównego pliku z rekordami bn; wskazanie listy interesujących pól
 bn_ok <- bn_ok %>%
   left_join(.,duble_ksiazek,by="id") %>%
-  select(id, X008, X009, X015, X041, X044, X080, X100, X245, X246, X250, X260, X300, X380, X386, X490, X500, X501, X546, X600, X650, X655, X700, X710, X800, X830, rok, BN_URL, osoba_bn_autor, osoba_bn_temat, dziedzina_PBL, bez_ukd_ale_PBL, czy_wspomnienia_reportaz, slowa_literackie, id_grupy_dubli)
+  select(id, X008, X009, X015, X041, X044, X080, X100, X245, X246, X250, X260, X300, X380, X386, X490, X500, X501, X546, X600, X650, X655, X700, X710, X800, X830, rok, BN_URL, osoba_bn_autor, osoba_bn_temat, dziedzina_PBL, bez_ukd_ale_PBL, czy_wspomnienia_reportaz, slowa_literackie, czy_biblia, id_grupy_dubli)
 
 duble_ksiazek <- bn_ok %>%
   filter(!is.na(id_grupy_dubli)) %>%
@@ -520,7 +532,7 @@ nie_poloniki <- bn_ok %>%
 
 bn_ok <- bn_ok %>%
   full_join(.,nie_poloniki,by = "id") %>%
-  select(id, X008, X009, X041, X044, X080, X100, X245, X246, X250, X260, X300, X380, X386, X490, X500, X501, X500, X546, X600, X650, X655, X700, X710, X800, X830, rok, BN_URL, osoba_bn_autor, osoba_bn_temat, dziedzina_PBL, bez_ukd_ale_PBL, czy_wspomnienia_reportaz, slowa_literackie, czy_polonik) %>%
+  select(id, X008, X009, X041, X044, X080, X100, X245, X246, X250, X260, X300, X380, X386, X490, X500, X501, X500, X546, X600, X650, X655, X700, X710, X800, X830, rok, BN_URL, osoba_bn_autor, osoba_bn_temat, dziedzina_PBL, bez_ukd_ale_PBL, czy_wspomnienia_reportaz, slowa_literackie, czy_polonik, czy_biblia) %>%
   unique()
 #wskazanie niepoloników i usunięcie ze zbioru
 nie_poloniki <- bn_ok %>%
@@ -570,24 +582,26 @@ listy_2004 <- listy_2004 %>%
 
 #wyznaczenie listy 650 i 655 do automatycznego INO na podstawie wcześniejszych importów - usunięte są tylko te deskryptory, które nie mają związku z literaturą podmiotową
 zapisy <- RJDBC::dbGetQuery(PBL,
-                            "select z.za_zapis_id, z.za_status_imp, z.za_uwagi
+                            "select z.za_zapis_id, z.za_status_imp, z.za_uwagi, z.za_adnotacje
                             from pbl_zapisy z
                             where z.za_uwagi like '%import%'") %>%
   mutate(pracownik_pbl = str_extract(ZA_UWAGI, "(?<=akceptuje:)([A-Z]*)")) %>%
-  select(ZA_ZAPIS_ID,pracownik_pbl,ZA_STATUS_IMP)
+  select(ZA_ZAPIS_ID,pracownik_pbl,ZA_STATUS_IMP,ZA_ADNOTACJE)
 #aktualizacja - dodaj do skryptu listę z ostatnim brakującym zaimportowanym rocznikiem
 do_importu_NIE <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008) %>%
   full_join(.,zapisy,by = "ZA_ZAPIS_ID") %>%
-  select(X650,X655,ZA_STATUS_IMP) %>%
+  select(X650,X655,ZA_STATUS_IMP,ZA_ADNOTACJE) %>%
   mutate(X650 = str_remove_all(X650,"\\\\7"),
          X655 = str_remove_all(X655,"\\\\7"),
          joint = paste(X650,X655,sep = "~")) %>%
-  select(ZA_STATUS_IMP,joint) %>%
+  select(ZA_STATUS_IMP,joint,ZA_ADNOTACJE) %>%
   group_by(joint) %>%
-  mutate(grupa = paste(ZA_STATUS_IMP,collapse = ",")) %>%
+  mutate(grupa = paste(ZA_STATUS_IMP,collapse = ","),
+         ZA_ADNOTACJE = paste(ZA_ADNOTACJE,collapse = ",")) %>%
   ungroup() %>%
-  select(joint, grupa) %>%
+  select(joint, grupa,ZA_ADNOTACJE) %>%
   unique() %>%
+  filter(!grepl("rozpisana|rozpisać|rozpisania",ZA_ADNOTACJE)) %>% 
   mutate(ile = str_count(grupa,",")+1) %>%
   filter(grepl("INO",grupa)) %>%
   filter(!grepl("IOK|IMP|IPN|IPC",grupa)) %>%
@@ -712,7 +726,7 @@ stare_rodzajowanie <- stare_rodzajowanie %>%
 ##właściwe rodzajowanie z uwaględnieniem jednego elementu ze starego rodzajowania
 bn_ok <- bn_ok %>%
   mutate(czy_ma_ukd = ifelse(X080=="","nie","tak"),
-         position_dash = ifelse(grepl("(\\\\\\\\\\$a|:)(821\\.)",X080),str_locate(X080,"\\-")[,1], NA),
+         position_dash = ifelse(grepl("(\\\\\\\\\\$a|:)(821\\.)",X080),str_locate(str_replace(X080,"(.*?)(\\$a821\\.)(.*?$)","\\2\\3"),"\\-")[,1]+nchar(str_replace(X080,"(.*?)(\\$a821\\.)(.*?$)","\\1")), NA),
          position_dash = ifelse(is.na(position_dash),"",as.integer(position_dash)),
          position_091 = str_locate(X080,"\\(091\\)")[,1],
          position_091 = ifelse(is.na(position_091),"",as.integer(position_091)),
@@ -764,8 +778,10 @@ bn_ok <- bn_ok %>%
          rodzaj_ksiazki = ifelse(grepl("aLektura z Opracowaniem - Zielona Sowa|aLektura \\(Greg\\)|aLektura Dobrze Opracowana|aLektura z Opracowaniem - Ibis",X830),"podmiotowa",as.character(rodzaj_ksiazki)),
          ilu_tworcow = str_count(X100,"\\$a"),
          rodzaj_ksiazki = ifelse(ilu_tworcow>4&rodzaj_ksiazki=="podmiotowa","antologia",as.character(rodzaj_ksiazki)),
-         rodzaj_ksiazki = ifelse(grepl("Legendy|\\$vantologi",X655),"antologia",as.character(rodzaj_ksiazki))) %>%
-  select(1:30,rodzaj_ksiazki)
+         rodzaj_ksiazki = ifelse(grepl("Legendy|\\$vantologi",X655),"antologia",as.character(rodzaj_ksiazki)),
+         rodzaj_ksiazki = ifelse(str_count(X100, "\\|")==0&X100!=""&rodzaj_ksiazki=="antologia"&grepl("Legendy i podania|Antologia",X655),"podmiotowa",as.character(rodzaj_ksiazki)),
+         rodzaj_ksiazki = ifelse(X100==""&str_count(X700,"\\$t")==3&grepl("Harlequin",X260),"antologia",as.character(rodzaj_ksiazki))) %>%
+  select(1:31,rodzaj_ksiazki)
 
 
 # przypisania do podmiotowej na podstawie smierci przed 1700
@@ -890,6 +906,26 @@ bn_ok <- bn_ok %>%
 ###czy i jak automatyzować przedmiotową?
 
 #write.csv2(bn_ok, "C:/Users/Cezary/Desktop/bn_ok_2009.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+```
+```{r}
+
+test <- bn_ks %>% 
+  filter(grepl("biblia", X630, ignore.case = TRUE)) %>% 
+  select(id, X245, X650, X655, X630) %>% 
+  filter(grepl("analiza i interpretacja|edycja krytyczna|materiały konferencyjne", X655, ignore.case = TRUE), 
+         id %notin% bn_ok$id)
+  
+test2 <- test %>% 
+  select(X655) %>% 
+  unique()
+
+
+
+
+
+
+
+
 ```
 
 ```{r wyznaczenie zbioru na do uzupełnienia w przyszłości}
@@ -2605,6 +2641,17 @@ bn_ok <- bn_ok %>%
 count <- as.data.frame(table(bn_ok$redaktor_dzialu,bn_ok$czy_automatycznie)) %>% 
   filter(Var2=="nie") %>% 
   arrange(-Freq)
+
+test <- as.data.frame(table(bn_ok$redaktor_dzialu,bn_ok$DZ_NAZWA,bn_ok$czy_automatycznie,bn_ok$rodzaj_ksiazki)) %>% 
+  filter(Var1=="ANIA"&Freq>0,
+         Var3=="nie") %>% 
+  arrange(-Freq)
+
+test2 <- bn_ok %>% 
+  filter(DZ_NAZWA=="Hasła osobowe (literatura polska) - K")
+
+count <- as.data.frame(table(test2$czy_automatycznie))
+  
 ```
 
 ```{r książki podmiotowe}
@@ -7151,6 +7198,10 @@ write.xlsx(bn_ok, "C:/Users/Cezary/Desktop/2009_listy_pracowników.xlsx",sheetNa
 #po zakończeniu importu stworzyć tabelę z relacją bn i pbl dla twórców powstałych w ostatnim imporcie
 
 
+count <- as.data.frame(table(bn_ok$dziedzina_PBL))
+
+test <- bn_ok %>% 
+  filter(grepl("82",X080))
 
 # zaimportować współwydania 2009 i przejrzeć pliki do zrobienia na później (trzeba uwzględnić to, że zmieniły się regulacje ze względu na słowniki językowe i biograficzne)
 
