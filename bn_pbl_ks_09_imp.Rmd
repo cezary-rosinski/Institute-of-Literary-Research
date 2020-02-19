@@ -299,10 +299,14 @@ bezpiecznik <- bn_ks %>%
 ```{r dalsze przygotowanie zbioru do importu - UKD, słowa kluczowe, poloniki}
 #wskazanie interesujących PBL dziedzin wiedzy po UKD i określenie typu UKD
 bn_ks <- bn_ks %>%
-  mutate(dziedzina_PBL = ifelse(str_detect(X080,"(?<=\\$a|:|\\[|\\+|\\()(82|811\\.162)"),"ukd_lit",
+  mutate(dziedzina_PBL = ifelse(str_detect(X080,"(?<=\\$a|:|\\[|\\+|\\()(82)"),"ukd_lit",
                                 ifelse(str_detect(X080,"(?<=\\$a|:|\\[|\\+)(791)")|str_detect(X080,"(?<=\\$a|:)(792)")|str_detect(X080,"\\$a7\\.09"),"ukd_tfrtv",
-                                       ifelse(str_detect(X080,"(?<=\\$a01)(\\(|\\/|2|4|5|9)")|str_detect(X080,"(?<=\\$a|\\[])(050)"),"ukd_biblio",
+                                       ifelse(str_detect(X080,"(?<=\\$a01)(\\(|\\/|2|4|5|9)")|str_detect(X080,"(?<=\\$a|\\[])(050)")|str_detect(X080,"(?<=\\$a|:|\\[|\\+|\\()(811\\.162)"),"ukd_biblio",
                                               ifelse(str_detect(X080,"\\$a002")|str_detect(X080,"(?<=\\$a|:)(305)")|str_detect(X080,"(?<=\\$a39|:39)(\\(438\\)|8\\.2)")|str_detect(X080,"(?<=\\$a|:)(929[^\\.]051)")|str_detect(X080,"(?<=\\$a|:)(929[^\\.]052)"),"ukd_pogranicze","bez_ukd_PBL")))))
+
+test <- bn_ks %>% 
+  select(dziedzina_PBL,X245,X650,X655) %>% 
+  filter(grepl("podręcznik",X655,ignore.case = TRUE))
 #wskazanie interesujących PBL rekordów bez UKD, które są w kluczu PBL
 bez_ukd_ale_PBL <- bn_ks %>%
   select(id, X080, X650, X655, osoba_bn_autor, osoba_bn_temat, dziedzina_PBL) %>%
@@ -907,31 +911,11 @@ bn_ok <- bn_ok %>%
 
 #write.csv2(bn_ok, "C:/Users/Cezary/Desktop/bn_ok_2009.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 ```
-```{r}
 
-test <- bn_ks %>% 
-  filter(grepl("biblia", X630, ignore.case = TRUE)) %>% 
-  select(id, X245, X650, X655, X630) %>% 
-  filter(grepl("analiza i interpretacja|edycja krytyczna|materiały konferencyjne", X655, ignore.case = TRUE), 
-         id %notin% bn_ok$id)
-  
-test2 <- test %>% 
-  select(X655) %>% 
-  unique()
-
-
-
-
-
-
-
-
-```
-
-```{r wyznaczenie zbioru na do uzupełnienia w przyszłości}
+```{r wyznaczenie zbioru do uzupełnienia w przyszłości}
 na_pozniej <- bn_ok %>%
   filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL=="bez_ukd_PBL") %>%
-  mutate(kategorie_literackie = ifelse(grepl("mitolog|baś|bajk|poezj|liryk|epik|dramat|literac|literat|pisar|wiersz|proz|powieś|opowiad|miniatur|aforyzm|esej|szkic|feliet|report|dzienni|wspomnie|autobiograf|kaza|rozmyśl|list",X650,ignore.case = TRUE)|grepl("mitolog|baś|bajk|poezj|liryk|epik|dramat|literac|literat|pisar|wiersz|proz|powieś|opowiad|miniatur|aforyzm|esej|szkic|feliet|report|dzienni|wspomnie|autobiograf|kaza|rozmyśl|list",X655, ignore.case = TRUE),"tak","nie")) %>%
+  mutate(kategorie_literackie = ifelse(grepl("mitolog|baś|bajk|poezj|liryk|epik|dramat|literac|literat|pisar|wiersz|proz|powieś|opowiad|miniatur|aforyzm|esej|szkic|feliet|report|dzienni|wspomnie|autobiograf|kaza|rozmyśl|list|interpretacj",X650,ignore.case = TRUE)|grepl("mitolog|baś|bajk|poezj|liryk|epik|dramat|literac|literat|pisar|wiersz|proz|powieś|opowiad|miniatur|aforyzm|esej|szkic|feliet|report|dzienni|wspomnie|autobiograf|kaza|rozmyśl|list|interpretacj",X655, ignore.case = TRUE),"tak","nie")) %>%
   filter(kategorie_literackie=="nie") %>%
   mutate(lata = ifelse(grepl("\\d{2}-",X100),str_replace(X100,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA),
          lata_temat = ifelse(grepl("\\d{2}-",X600),str_replace(X600,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA)) %>%
@@ -2137,7 +2121,7 @@ podmiotowa_redaktorzy <- bn_ok %>%
   filter(ZA_UWAGI %notin% do_podmiotowej4$ZA_UWAGI) %>%
   filter(ZA_UWAGI %notin% do_podmiotowej5$ZA_UWAGI) %>%
   filter(ZA_UWAGI %notin% do_podmiotowej6$ZA_UWAGI)
-#naddatek przypisać Karolinie jako podmiotową bez twórców i czy_automatycznie <- nie
+#naddatek przypisać Marcie jako podmiotową bez twórców i czy_automatycznie <- nie
 do_podmiotowej7 <- podmiotowa_redaktorzy %>%
   mutate(TW_TWORCA_ID = NA,
          TW_NAZWISKO = NA,
@@ -2146,7 +2130,7 @@ do_podmiotowej7 <- podmiotowa_redaktorzy %>%
          DZ_NAZWA = NA,
          RZ_RODZAJ_ID = 1,
          RZ_NAZWA = "książka twórcy (podmiotowa)",
-         redaktor_dzialu = "GOSIAx") %>%
+         redaktor_dzialu = "MARTAKx") %>%
   select(names(do_podmiotowej5))
 #trzeba zaktualizować w bn_ok, że teraz to nie są automatyczne
 lista_do_przepisania <- do_podmiotowej7$ZA_UWAGI
@@ -2540,7 +2524,7 @@ wspolwydanie_redaktorzy <- bn_ok %>%
   filter(ZA_UWAGI %notin% do_wspolwydania4$ZA_UWAGI) %>% 
   filter(ZA_UWAGI %notin% do_wspolwydania5$ZA_UWAGI)
 
-#naddatek przypisać Gosi jako podmiotową bez twórców i czy_automatycznie <- nie
+#naddatek przypisać Marcie jako podmiotową bez twórców i czy_automatycznie <- nie
 do_wspolwydania6 <- wspolwydanie_redaktorzy %>%
   mutate(TW_TWORCA_ID = NA,
          TW_NAZWISKO = NA,
@@ -2549,7 +2533,7 @@ do_wspolwydania6 <- wspolwydanie_redaktorzy %>%
          DZ_NAZWA = NA,
          RZ_RODZAJ_ID = 1,
          RZ_NAZWA = "książka twórcy (podmiotowa)",
-         redaktor_dzialu = "GOSIAx") %>%
+         redaktor_dzialu = "MARTAKx") %>%
   select(names(do_wspolwydania5))
 #trzeba zaktualizować w bn_ok, że teraz to nie są automatyczne
 lista_do_przepisania <- do_wspolwydania6$ZA_UWAGI
@@ -2578,7 +2562,9 @@ bn_ok <- bn_ok %>%
                                                                                                                ifelse(DZ_NAZWA=="Hasła osobowe (literatura polska) - U","PAULINA",
                                                                                                                       ifelse(DZ_NAZWA=="Hasła osobowe (literatura polska) - X","PAULINA",
                                                                                                                              ifelse(DZ_NAZWA=="Hasła osobowe (literatura polska) - V","PAULINA",
-                                                                                                                                    ifelse(DZ_NAZWA=="Hasła osobowe (literatura polska) - Y","PAULINA",as.character(redaktor_dzialu))))))))))))))))))
+                                                                                                                                    ifelse(DZ_NAZWA=="Hasła osobowe (literatura polska) - Y","PAULINA",
+                                                                                                                                           ifelse(DZ_NAZWA=="Hasła osobowe (literatura polska) - C","GOSIA",
+                                                                                                                                                  ifelse(DZ_NAZWA=="Hasła osobowe (literatura polska) - D","GOSIA",as.character(redaktor_dzialu))))))))))))))))))))
 
 #ujednolicenie literatury dla kilku zapisów nowego twórcy
 kilka_literatur_nowego_tworcy <- bn_ok %>%
@@ -2627,7 +2613,7 @@ slowniki_jezykowe_zle <- bn_ok %>%
 
 slowniki_biograficzne_zle <- bn_ok %>% 
   filter(DZ_NAZWA=="Słowniki biograficzne") %>% 
-  filter(!(grepl("Słownik biograficzny|Biografia",X655)&(grepl("pisarz|litera|aktor|scenograf|nauczyciel|akademi|nauk|filolog|lit|kryty",X655,ignore.case = TRUE)|grepl("pisarz|litera|aktor|scenograf|nauczyciel|akademi|nauk|filolog|lit|kryty",X650,ignore.case = TRUE))))
+  filter(!(grepl("Słownik biograficzny|Biografia",X655)&(grepl("pisarz|litera|aktor|scenograf|nauczyciel|akademi|nauk|filolog|kryty|lit\\.",X655,ignore.case = TRUE)|grepl("pisarz|litera|aktor|scenograf|nauczyciel|akademi|nauk|filolog|kryty|lit\\.",X650,ignore.case = TRUE))))
 
 bn_ok <- bn_ok %>%
   filter(ZA_UWAGI %notin% slowniki_jezykowe_zle$ZA_UWAGI) %>% 
@@ -2641,18 +2627,37 @@ bn_ok <- bn_ok %>%
 count <- as.data.frame(table(bn_ok$redaktor_dzialu,bn_ok$czy_automatycznie)) %>% 
   filter(Var2=="nie") %>% 
   arrange(-Freq)
-
-test <- as.data.frame(table(bn_ok$redaktor_dzialu,bn_ok$DZ_NAZWA,bn_ok$czy_automatycznie,bn_ok$rodzaj_ksiazki)) %>% 
-  filter(Var1=="ANIA"&Freq>0,
-         Var3=="nie") %>% 
-  arrange(-Freq)
-
-test2 <- bn_ok %>% 
-  filter(DZ_NAZWA=="Hasła osobowe (literatura polska) - K")
-
-count <- as.data.frame(table(test2$czy_automatycznie))
-  
 ```
+
+```{r uzupełnienia}
+obiekt <- sheets_read(ss = "1Gc4gQSm9b4NDTQysiauzW9Jac6yP0oNuFbB8utO4kS4") %>% 
+  filter(!is.na(pracownik))
+
+uzupelnienia <- bn_ok %>% 
+  filter(X245 %notin% obiekt$X245)
+
+count <- as.data.frame(table(uzupelnienia$redaktor_dzialu))
+
+obiekt_testowy <- uzupelnienia %>% 
+  filter(redaktor_dzialu == "BEATAS", DZ_NAZWA == "Historia literatury (grecka starożytna)") %>% 
+  select(X080, X245, X650, X655)
+
+obiekt_kolejny <- uzupelnienia %>% 
+  filter(grepl("podręcznik", X655, ignore.case = TRUE))
+
+
+
+
+obiekt <- dbGetQuery(PBL,
+                     "select z.za_url_bn
+from IBL_OWNER.pbl_zapisy z
+where z.za_uwagi like '%import%2020%'") %>% 
+  mutate(ZA_URL_BN = str_extract(ZA_URL_BN, "(?<=alma)(\\d+)"))
+
+uzupelnienia <- bn_ok %>% 
+  filter(BN_URL %notin% obiekt$ZA_URL_BN)
+```
+
 
 ```{r książki podmiotowe}
 data <- bn_ok %>%
@@ -3662,7 +3667,8 @@ polaczone$za_adnotacje <- ifelse(grepl("\\#",polaczone$za_opis_wspoltworcow),
 #korekta automatycznego IOK
 automatyczny_IOK <- polaczone %>%
   mutate(czy_tyt_oryg = (!grepl("polsk",DZ_NAZWA)&!is.na(za_tytul_oryginalu))|grepl("polsk",DZ_NAZWA)) %>%
-  filter(za_adnotacje==""&am_nazwisko!="NA"&!grepl("pseud|nazw",za_opis_fizyczny_ksiazki)&!grepl("\\|",am_nazwisko)&czy_tyt_oryg==TRUE) %>%
+  filter(za_adnotacje==""&am_nazwisko!="NA"&!grepl("pseud|nazw",za_opis_fizyczny_ksiazki)&!grepl("\\|",am_nazwisko)&czy_tyt_oryg==TRUE,
+         !grepl("szkic|felieton|list",str_replace(za_tytul,"(.*)(\\[.*$)","\\2"),ignore.case = TRUE)) %>%
   select(rekord_BN) %>%
   unique() %>%
   filter(rekord_BN %notin% data$ZA_UWAGI[data$czy_automatycznie=="nie"]) %>%
