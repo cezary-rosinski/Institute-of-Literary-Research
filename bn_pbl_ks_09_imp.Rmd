@@ -94,7 +94,6 @@ drugi_autor <- drugi_autor %>%
 bn_ks <- bn_ks %>%
   mutate(X100 = drugi_autor$X100,
          X700 = drugi_autor$X700)
-
 ##koniec przenosin
 ```
 
@@ -304,9 +303,24 @@ bn_ks <- bn_ks %>%
                                        ifelse(str_detect(X080,"(?<=\\$a01)(\\(|\\/|2|4|5|9)")|str_detect(X080,"(?<=\\$a|\\[])(050)")|str_detect(X080,"(?<=\\$a|:|\\[|\\+|\\()(811\\.162)"),"ukd_biblio",
                                               ifelse(str_detect(X080,"\\$a002")|str_detect(X080,"(?<=\\$a|:)(305)")|str_detect(X080,"(?<=\\$a39|:39)(\\(438\\)|8\\.2)")|str_detect(X080,"(?<=\\$a|:)(929[^\\.]051)")|str_detect(X080,"(?<=\\$a|:)(929[^\\.]052)"),"ukd_pogranicze","bez_ukd_PBL")))))
 
-test <- bn_ks %>% 
-  select(dziedzina_PBL,X245,X650,X655) %>% 
-  filter(grepl("podręcznik",X655,ignore.case = TRUE))
+#ograniczenie rekordów z ukd językowym
+biblio <- bn_ks %>% 
+  select(id, X008, X009, X015, X041, X044, X080, X100, X245, X246, X250, X260, X300, X380, X386, X490, X500, X501, X546, X600, X650, X655, X700, X710, X800, X830, rok, BN_URL, osoba_bn_autor, osoba_bn_temat, dziedzina_PBL) %>% 
+  filter(dziedzina_PBL=="ukd_biblio")
+dobre_biblio <- biblio %>% 
+  filter(!grepl("Podręczniki dla dzieci|Podręczniki dla szkół podstawowych",X655),
+         !grepl("szkoły podstawowe|rozmówki|nauczanie|logopedia",X650,ignore.case = TRUE),
+         !grepl("811\\.162\\.1\\(075\\.2\\)|811\\.162\\'24\\(078\\)",X080),
+         !grepl("ćwiczenia i zadania|poradniki dla nauczycieli|słownik.*?\\-polski|słownik polsko\\-|Słowniki dla dzieci",X655,ignore.case = TRUE),
+         !(grepl("Podręczniki",X655)&grepl("Kształcenie nauczycieli",X650)))
+dobre_biblio2 <- biblio %>% 
+  filter(!(is.na(osoba_bn_autor)&is.na(osoba_bn_temat)))
+dobre_biblio <- dobre_biblio %>% 
+  bind_rows(dobre_biblio2 %>% filter(id %notin% dobre_biblio$id))
+zle_biblio <- biblio %>% 
+  filter(id %notin% dobre_biblio$id)
+bn_ks$dziedzina_PBL[bn_ks$id %in% zle_biblio$id] <- NA
+
 #wskazanie interesujących PBL rekordów bez UKD, które są w kluczu PBL
 bez_ukd_ale_PBL <- bn_ks %>%
   select(id, X080, X650, X655, osoba_bn_autor, osoba_bn_temat, dziedzina_PBL) %>%
@@ -2645,8 +2659,9 @@ obiekt_testowy <- uzupelnienia %>%
 obiekt_kolejny <- uzupelnienia %>% 
   filter(grepl("podręcznik", X655, ignore.case = TRUE))
 
+bn_ok_pelne <- bn_ok
 
-
+bn_ok <- uzupelnienia
 
 obiekt <- dbGetQuery(PBL,
                      "select z.za_url_bn
@@ -2737,18 +2752,18 @@ for (i in x) {
 }
 
 BN_autor <- marc_field_100 %>%
-  select(ZA_UWAGI,`$a`,`$b`) %>%
-  unique() %>%
-  mutate(`$a` = ifelse(!is.na(`$b`),paste(`$a`,`$b`,sep = " "),as.character(`$a`))) %>%
-  mutate(`$a` = str_remove(`$a`,"(?<=[a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźž])(\\.$)")) %>%
-  unique() %>%
-  mutate(AM_NAZWISKO = ifelse(grepl("\\|",`$a`), str_replace_all(str_remove_all(`$a`,","),"\\|",", "),
-                              ifelse(grepl(",",`$a`),str_replace_all(`$a`,"(.*?)(, )(.*)","\\1"),as.character(`$a`))),
-         AM_IMIE = ifelse(grepl("\\|",`$a`),"*",
-                          ifelse(grepl(",",`$a`),str_replace_all(`$a`,"(.*?)(, )(.*)","\\3"),"*"))) %>%
-  select(ZA_UWAGI,AM_NAZWISKO,AM_IMIE) %>%
-  left_join(.,marc_field_245,by="ZA_UWAGI") %>%
-  select(ZA_UWAGI,AM_NAZWISKO,AM_IMIE, X245c = `$c`)
+ select(ZA_UWAGI,`$a`,`$b`) %>%
+ unique() %>%
+ mutate(`$a` = ifelse(!is.na(`$b`),paste(`$a`,`$b`,sep = " "),as.character(`$a`))) %>%
+ mutate(`$a` = str_remove(`$a`,"(?<=[a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźž])(\\.$)")) %>%
+ unique() %>%
+ mutate(AM_NAZWISKO = ifelse(grepl("\\|",`$a`), str_replace_all(str_remove_all(`$a`,","),"\\|",", "),
+                             ifelse(grepl(",",`$a`),str_replace_all(`$a`,"(.*?)(, )(.*)","\\1"),as.character(`$a`))),
+        AM_IMIE = ifelse(grepl("\\|",`$a`),"*",
+                         ifelse(grepl(",",`$a`),str_replace_all(`$a`,"(.*?)(, )(.*)","\\3"),"*"))) %>%
+ select(ZA_UWAGI,AM_NAZWISKO,AM_IMIE) %>%
+ left_join(.,marc_field_245,by="ZA_UWAGI") %>%
+ select(ZA_UWAGI,AM_NAZWISKO,AM_IMIE, X245c = `$c`)
   
 x <- 1:lengths(BN_autor[1])
 for (i in x) {
@@ -2800,7 +2815,7 @@ for (i in x) {
   string <- paste(string_a,string_b,string_c,sep = "")
   marc_field_245[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_245$X245),str_replace_all(gsub(string,"\\3",marc_field_245$X245),"\\${2}.", "~"),NA)
 }
-
+if("$n" %in% colnames(marc_field_245)) {
 marc_field_245 <- marc_field_245 %>%
   select(ZA_UWAGI,`$a`,`$b`,`$n`,`$p`) %>%
   group_by(ZA_UWAGI) %>%
@@ -2825,6 +2840,30 @@ marc_field_245 <- marc_field_245 %>%
          ZA_TYTUL = str_replace_all(ZA_TYTUL," ; ",". "),
          ZA_TYTUL = gsub("( : )(.)",". \\U\\2",perl=TRUE,ZA_TYTUL)) %>%
   select(ZA_UWAGI,ZA_TYTUL)
+} else {
+  marc_field_245 <- marc_field_245 %>%
+  select(ZA_UWAGI,`$a`,`$b`) %>%
+  group_by(ZA_UWAGI) %>%
+  mutate(`$a` = paste(ifelse(is.na(`$a`),"",as.character(`$a`)),collapse = " "),
+         `$b` = paste(ifelse(is.na(`$b`),"",as.character(`$b`)),collapse = " ")) %>%
+  ungroup() %>%
+  unique() %>%
+  unite("ZA_TYTUL",`$a`:`$b`,sep = " ",na.rm = TRUE) %>% 
+  mutate(ZA_TYTUL = str_replace_all(ZA_TYTUL," +"," "),
+         ZA_TYTUL = str_remove(ZA_TYTUL, "\\s+\\/\\s{0,}$"),
+         ZA_TYTUL = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(\\(|\\[)(.)",ZA_TYTUL),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,ZA_TYTUL),
+                           ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",ZA_TYTUL),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,ZA_TYTUL),
+                                  ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(.)",ZA_TYTUL),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(.)","\\1.\\2\\U\\5",perl = TRUE,ZA_TYTUL),
+                                         ifelse(grepl("(\\W)( )(:|;)( )(.)",ZA_TYTUL),gsub("(\\W)( )(:|;)( )(.)","\\1\\2\\U\\5",perl = TRUE,ZA_TYTUL),as.character(ZA_TYTUL))))),
+         ZA_TYTUL = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(\\(|\\[)(.)",ZA_TYTUL),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,ZA_TYTUL),
+                           ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",ZA_TYTUL),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,ZA_TYTUL),
+                                  ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(.)",ZA_TYTUL),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(.)","\\1.\\2\\U\\5",perl = TRUE,ZA_TYTUL),
+                                         ifelse(grepl("(\\W)( )(:|;)( )(.)",ZA_TYTUL),gsub("(\\W)( )(:|;)( )(.)","\\1\\2\\U\\5",perl = TRUE,ZA_TYTUL),as.character(ZA_TYTUL))))),
+         ZA_TYTUL = str_replace_all(ZA_TYTUL,"\\.{3} \\.{3}","... "),
+         ZA_TYTUL = str_replace_all(ZA_TYTUL," ; ",". "),
+         ZA_TYTUL = gsub("( : )(.)",". \\U\\2",perl=TRUE,ZA_TYTUL)) %>%
+  select(ZA_UWAGI,ZA_TYTUL)
+}
 #dopisanie gatunku do przedmiotowej na podstawie 655 i 650  
 gatunki_pbl <- data.frame(gatunek = c("aforyzm", "album", "antologia", "autobiografia", "dziennik", "esej", "felieton", "inne", "kazanie", "list", "miniatura prozą", "opowiadanie", "poemat", "powieść", "proza", "proza poetycka", "reportaż", "rozmyślanie religijne", "rysunek, obraz", "scenariusz", "szkic", "tekst biblijny", "tekst dramatyczny", "dramat", "wiersz", "wspomnienia", "wypowiedź", "pamiętniki", "poezja", "literatura podróżnicza", "satyra", "piosenka"))
 
@@ -2896,8 +2935,8 @@ for (i in x) {
   string <- paste(string_a,string_b,string_c,sep = "")
   marc_field_246[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_246$X246),str_replace_all(gsub(string,"\\3",marc_field_246$X246),"\\${2}.", "~"),NA)
 }
-
-marc_field_246 <- marc_field_246 %>%
+if("$n" %in% colnames(marc_field_246)) {
+marc_field_246 <- marc_field_246[, colSums(is.na(marc_field_246)) != nrow(marc_field_246)] %>%
   filter(grepl("oryg",X246)) %>%
   select(ZA_UWAGI,`$a`,`$b`,`$n`,`$p`) %>%
   group_by(ZA_UWAGI) %>%
@@ -2921,6 +2960,30 @@ marc_field_246 <- marc_field_246 %>%
          X246 = str_replace_all(X246,"\\.{3} \\.{3}","... "),
          X246 = gsub("( : )(.)",". \\U\\2",perl=TRUE,X246)) %>%
   select(ZA_UWAGI, X246)
+} else {
+  marc_field_246 <- marc_field_246[, colSums(is.na(marc_field_246)) != nrow(marc_field_246)] %>%
+  filter(grepl("oryg",X246)) %>%
+  select(ZA_UWAGI,`$a`,`$b`) %>%
+  group_by(ZA_UWAGI) %>%
+  mutate(`$a` = paste(ifelse(is.na(`$a`),"",as.character(`$a`)),collapse = ", "),
+         `$b` = paste(ifelse(is.na(`$b`),"",as.character(`$b`)),collapse = "")) %>%
+  ungroup() %>%
+  unique() %>%
+  unite("X246",`$a`:`$b`,sep = " ",na.rm = TRUE) %>% 
+  mutate(X246 = str_replace_all(X246," +"," "),
+         X246 = str_remove(X246, "\\s+\\/\\s{0,}$"),
+         X246 = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,X246),
+                           ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",X246),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,X246),
+                                  ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)","\\1.\\2\\U\\5",perl = TRUE,X246),
+                                         ifelse(grepl("(\\W)( )(:|;)( )(.)",X246),gsub("(\\W)( )(:|;)( )(.)","\\1\\2\\U\\5",perl = TRUE,X246),as.character(X246))))),
+         X246 = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,X246),
+                           ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",X246),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,X246),
+                                  ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)","\\1.\\2\\U\\5",perl = TRUE,X246),
+                                         ifelse(grepl("(\\W)( )(:|;)( ){0,1}(.)",X246),gsub("(\\W)( )(:|;)( ){0,1}(.)","\\1\\2\\U\\5",perl = TRUE,X246),as.character(X246))))),
+         X246 = str_replace_all(X246,"\\.{3} \\.{3}","... "),
+         X246 = gsub("( : )(.)",". \\U\\2",perl=TRUE,X246)) %>%
+  select(ZA_UWAGI, X246)
+}
 
 #pole 500
 marc_field_500 <- data %>%
@@ -3987,7 +4050,8 @@ for (i in x) {
   marc_field_246[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_246$X246),str_replace_all(gsub(string,"\\3",marc_field_246$X246),"\\${2}.", "~"),NA)
 }
 
-marc_field_246 <- marc_field_246 %>%
+if("$n" %in% colnames(marc_field_246)) {
+marc_field_246 <- marc_field_246[, colSums(is.na(marc_field_246)) != nrow(marc_field_246)] %>%
   filter(grepl("oryg",X246)) %>%
   select(ZA_UWAGI,`$a`,`$b`,`$n`,`$p`) %>%
   group_by(ZA_UWAGI) %>%
@@ -4011,6 +4075,30 @@ marc_field_246 <- marc_field_246 %>%
          X246 = str_replace_all(X246,"\\.{3} \\.{3}","... "),
          X246 = gsub("( : )(.)",". \\U\\2",perl=TRUE,X246)) %>%
   select(ZA_UWAGI, X246)
+} else {
+  marc_field_246 <- marc_field_246[, colSums(is.na(marc_field_246)) != nrow(marc_field_246)] %>%
+  filter(grepl("oryg",X246)) %>%
+  select(ZA_UWAGI,`$a`,`$b`) %>%
+  group_by(ZA_UWAGI) %>%
+  mutate(`$a` = paste(ifelse(is.na(`$a`),"",as.character(`$a`)),collapse = ", "),
+         `$b` = paste(ifelse(is.na(`$b`),"",as.character(`$b`)),collapse = "")) %>%
+  ungroup() %>%
+  unique() %>%
+  unite("X246",`$a`:`$b`,sep = " ",na.rm = TRUE) %>% 
+  mutate(X246 = str_replace_all(X246," +"," "),
+         X246 = str_remove(X246, "\\s+\\/\\s{0,}$"),
+         X246 = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,X246),
+                           ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",X246),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,X246),
+                                  ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)","\\1.\\2\\U\\5",perl = TRUE,X246),
+                                         ifelse(grepl("(\\W)( )(:|;)( )(.)",X246),gsub("(\\W)( )(:|;)( )(.)","\\1\\2\\U\\5",perl = TRUE,X246),as.character(X246))))),
+         X246 = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,X246),
+                           ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",X246),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,X246),
+                                  ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)","\\1.\\2\\U\\5",perl = TRUE,X246),
+                                         ifelse(grepl("(\\W)( )(:|;)( ){0,1}(.)",X246),gsub("(\\W)( )(:|;)( ){0,1}(.)","\\1\\2\\U\\5",perl = TRUE,X246),as.character(X246))))),
+         X246 = str_replace_all(X246,"\\.{3} \\.{3}","... "),
+         X246 = gsub("( : )(.)",". \\U\\2",perl=TRUE,X246)) %>%
+  select(ZA_UWAGI, X246)
+}
 
 #pole 500
 marc_field_500 <- data %>%
@@ -4754,16 +4842,6 @@ for (i in x) {
 #zasygnalizowanie obecności znaku # w opisie współtwórców
 polaczone$za_adnotacje <- ifelse(grepl("\\#",polaczone$za_opis_wspoltworcow),
                                    ifelse(nchar(polaczone$za_adnotacje)==0,"UWAGA! Ze względu na konflikt w opisie współtwórców wybierz właściwą wartość (strefa odpowiedzialności \"#\" współtwórcy z pola 700)",paste(polaczone$za_adnotacje,"UWAGA! Ze względu na konflikt w opisie współtwórców wybierz właściwą wartość (strefa odpowiedzialności # współtwórcy z pola 700)",sep = "# ")),as.character(polaczone$za_adnotacje))
-#korekta automatycznego IOK
-automatyczny_IOK <- polaczone %>%
-  mutate(czy_tyt_oryg = (!grepl("polsk",DZ_NAZWA)&!is.na(za_tytul_oryginalu))|grepl("polsk",DZ_NAZWA)) %>%
-  filter(za_adnotacje==""&am_nazwisko!="NA"&!grepl("pseud|nazw",za_opis_fizyczny_ksiazki)&!grepl("\\|",am_nazwisko)&czy_tyt_oryg==TRUE) %>%
-  select(rekord_BN) %>%
-  unique() %>%
-  filter(rekord_BN %notin% data$ZA_UWAGI[data$czy_automatycznie=="nie"]) %>%
-  mutate(powinno_byc = "IOK")
-#aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(automatyczny_IOK, "C:/Users/Cezary/Desktop/imp_2009_automatyczne_przedmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 out <- cSplit(polaczone, c("am_autor_id", "am_nazwisko", "am_imie","os_osoba_id","os_nazwisko", "os_imie", "fo_symbol","wy_wydawnictwo_id","wy_miejsce","wy_nazwa"),sep = "|",direction = "long") %>%
   unique()
@@ -4854,9 +4932,7 @@ out$pracownik[out$same == 1] <- ""
 out$za_adnotacje[out$same == 1] <- ""
 out$BN_URL[out$same == 1] <- ""
 
-#przypisanie do automatycznego OK redaktora "automat"
 out <- out %>%
-  mutate(pracownik = ifelse(rekord_BN %in% automatyczny_IOK$rekord_BN,"AUTOMAT",as.character(pracownik))) %>%
   select(1:33)
 
 #pętla zapisująca po ok. 2000 wierszy z uwzględnieniem kompletności rekordów bibliograficznych rozpisanych na kilka wierszy
@@ -4984,29 +5060,29 @@ for (i in x) {
 }
 
 marc_field_245 <- marc_field_245 %>%
-  select(ZA_UWAGI,`$a`,`$b`,`$n`,`$p`) %>%
-  group_by(ZA_UWAGI) %>%
-  mutate(`$a` = paste(ifelse(is.na(`$a`),"",as.character(`$a`)),collapse = " "),
-         `$b` = paste(ifelse(is.na(`$b`),"",as.character(`$b`)),collapse = " "),
-         `$n` = paste(ifelse(is.na(`$n`),"",as.character(`$n`)),collapse = " "),
-         `$p` = paste(ifelse(is.na(`$p`),"",as.character(`$p`)),collapse = " ")) %>%
-  ungroup() %>%
-  unique() %>%
-  unite("ZA_TYTUL",`$a`:`$p`,sep = " ",na.rm = TRUE) %>% 
-  mutate(ZA_TYTUL = str_replace_all(ZA_TYTUL," +"," "),
-         ZA_TYTUL = str_remove(ZA_TYTUL, "\\s+\\/\\s{0,}$"),
-         ZA_TYTUL = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(\\(|\\[)(.)",ZA_TYTUL),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,ZA_TYTUL),
-                           ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",ZA_TYTUL),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,ZA_TYTUL),
-                                  ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(.)",ZA_TYTUL),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(.)","\\1.\\2\\U\\5",perl = TRUE,ZA_TYTUL),
-                                         ifelse(grepl("(\\W)( )(:|;)( )(.)",ZA_TYTUL),gsub("(\\W)( )(:|;)( )(.)","\\1\\2\\U\\5",perl = TRUE,ZA_TYTUL),as.character(ZA_TYTUL))))),
-         ZA_TYTUL = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(\\(|\\[)(.)",ZA_TYTUL),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,ZA_TYTUL),
-                           ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",ZA_TYTUL),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,ZA_TYTUL),
-                                  ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(.)",ZA_TYTUL),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(.)","\\1.\\2\\U\\5",perl = TRUE,ZA_TYTUL),
-                                         ifelse(grepl("(\\W)( )(:|;)( )(.)",ZA_TYTUL),gsub("(\\W)( )(:|;)( )(.)","\\1\\2\\U\\5",perl = TRUE,ZA_TYTUL),as.character(ZA_TYTUL))))),
-         ZA_TYTUL = str_replace_all(ZA_TYTUL,"\\.{3} \\.{3}","... "),
-         ZA_TYTUL = str_replace_all(ZA_TYTUL," ; ",". "),
-         ZA_TYTUL = gsub("( : )(.)",". \\U\\2",perl=TRUE,ZA_TYTUL)) %>%
-  select(ZA_UWAGI,ZA_TYTUL)
+ select(ZA_UWAGI,`$a`,`$b`,`$n`,`$p`) %>%
+ group_by(ZA_UWAGI) %>%
+ mutate(`$a` = paste(ifelse(is.na(`$a`),"",as.character(`$a`)),collapse = " "),
+        `$b` = paste(ifelse(is.na(`$b`),"",as.character(`$b`)),collapse = " "),
+        `$n` = paste(ifelse(is.na(`$n`),"",as.character(`$n`)),collapse = " "),
+        `$p` = paste(ifelse(is.na(`$p`),"",as.character(`$p`)),collapse = " ")) %>%
+ ungroup() %>%
+ unique() %>%
+ unite("ZA_TYTUL",`$a`:`$p`,sep = " ",na.rm = TRUE) %>%
+ mutate(ZA_TYTUL = str_replace_all(ZA_TYTUL," +"," "),
+        ZA_TYTUL = str_remove(ZA_TYTUL, "\\s+\\/\\s{0,}$"),
+        ZA_TYTUL = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(\\(|\\[)(.)",ZA_TYTUL),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,ZA_TYTUL),
+                          ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",ZA_TYTUL),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,ZA_TYTUL),
+                                 ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(.)",ZA_TYTUL),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(.)","\\1.\\2\\U\\5",perl = TRUE,ZA_TYTUL),
+                                        ifelse(grepl("(\\W)( )(:|;)( )(.)",ZA_TYTUL),gsub("(\\W)( )(:|;)( )(.)","\\1\\2\\U\\5",perl = TRUE,ZA_TYTUL),as.character(ZA_TYTUL))))),
+        ZA_TYTUL = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(\\(|\\[)(.)",ZA_TYTUL),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,ZA_TYTUL),
+                          ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",ZA_TYTUL),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,ZA_TYTUL),
+                                 ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(.)",ZA_TYTUL),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( )(.)","\\1.\\2\\U\\5",perl = TRUE,ZA_TYTUL),
+                                        ifelse(grepl("(\\W)( )(:|;)( )(.)",ZA_TYTUL),gsub("(\\W)( )(:|;)( )(.)","\\1\\2\\U\\5",perl = TRUE,ZA_TYTUL),as.character(ZA_TYTUL))))),
+        ZA_TYTUL = str_replace_all(ZA_TYTUL,"\\.{3} \\.{3}","... "),
+        ZA_TYTUL = str_replace_all(ZA_TYTUL," ; ",". "),
+        ZA_TYTUL = gsub("( : )(.)",". \\U\\2",perl=TRUE,ZA_TYTUL)) %>%
+ select(ZA_UWAGI,ZA_TYTUL)
 #dopisanie gatunku do przedmiotowej na podstawie 655 i 650  
 gatunki_pbl <- data.frame(gatunek = c("aforyzm", "album", "antologia", "autobiografia", "dziennik", "esej", "felieton", "inne", "kazanie", "list", "miniatura prozą", "opowiadanie", "poemat", "powieść", "proza", "proza poetycka", "reportaż", "rozmyślanie religijne", "rysunek, obraz", "scenariusz", "szkic", "tekst biblijny", "tekst dramatyczny", "dramat", "wiersz", "wspomnienia", "wypowiedź", "pamiętniki", "poezja", "literatura podróżnicza", "satyra", "piosenka"))
 
@@ -5078,29 +5154,29 @@ for (i in x) {
 }
 
 marc_field_246 <- marc_field_246 %>%
-  filter(grepl("oryg",X246)) %>%
-  select(ZA_UWAGI,`$a`,`$b`,`$n`,`$p`) %>%
-  group_by(ZA_UWAGI) %>%
-  mutate(`$a` = paste(ifelse(is.na(`$a`),"",as.character(`$a`)),collapse = ", "),
-         `$b` = paste(ifelse(is.na(`$b`),"",as.character(`$b`)),collapse = ""),
-         `$n` = paste(ifelse(is.na(`$n`),"",as.character(`$n`)),collapse = ""),
-         `$p` = paste(ifelse(is.na(`$p`),"",as.character(`$p`)),collapse = "")) %>%
-  ungroup() %>%
-  unique() %>%
-  unite("X246",`$a`:`$p`,sep = " ",na.rm = TRUE) %>% 
-  mutate(X246 = str_replace_all(X246," +"," "),
-         X246 = str_remove(X246, "\\s+\\/\\s{0,}$"),
-         X246 = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,X246),
-                           ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",X246),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,X246),
-                                  ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)","\\1.\\2\\U\\5",perl = TRUE,X246),
-                                         ifelse(grepl("(\\W)( )(:|;)( )(.)",X246),gsub("(\\W)( )(:|;)( )(.)","\\1\\2\\U\\5",perl = TRUE,X246),as.character(X246))))),
-         X246 = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,X246),
-                           ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",X246),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,X246),
-                                  ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)","\\1.\\2\\U\\5",perl = TRUE,X246),
-                                         ifelse(grepl("(\\W)( )(:|;)( ){0,1}(.)",X246),gsub("(\\W)( )(:|;)( ){0,1}(.)","\\1\\2\\U\\5",perl = TRUE,X246),as.character(X246))))),
-         X246 = str_replace_all(X246,"\\.{3} \\.{3}","... "),
-         X246 = gsub("( : )(.)",". \\U\\2",perl=TRUE,X246)) %>%
-  select(ZA_UWAGI, X246)
+ filter(grepl("oryg",X246)) %>%
+ select(ZA_UWAGI,`$a`,`$b`,`$n`,`$p`) %>%
+ group_by(ZA_UWAGI) %>%
+ mutate(`$a` = paste(ifelse(is.na(`$a`),"",as.character(`$a`)),collapse = ", "),
+        `$b` = paste(ifelse(is.na(`$b`),"",as.character(`$b`)),collapse = ""),
+        `$n` = paste(ifelse(is.na(`$n`),"",as.character(`$n`)),collapse = ""),
+        `$p` = paste(ifelse(is.na(`$p`),"",as.character(`$p`)),collapse = "")) %>%
+ ungroup() %>%
+ unique() %>%
+ unite("X246",`$a`:`$p`,sep = " ",na.rm = TRUE) %>%
+ mutate(X246 = str_replace_all(X246," +"," "),
+        X246 = str_remove(X246, "\\s+\\/\\s{0,}$"),
+        X246 = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,X246),
+                          ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",X246),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,X246),
+                                 ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)","\\1.\\2\\U\\5",perl = TRUE,X246),
+                                        ifelse(grepl("(\\W)( )(:|;)( )(.)",X246),gsub("(\\W)( )(:|;)( )(.)","\\1\\2\\U\\5",perl = TRUE,X246),as.character(X246))))),
+        X246 = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,X246),
+                          ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",X246),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,X246),
+                                 ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)","\\1.\\2\\U\\5",perl = TRUE,X246),
+                                        ifelse(grepl("(\\W)( )(:|;)( ){0,1}(.)",X246),gsub("(\\W)( )(:|;)( ){0,1}(.)","\\1\\2\\U\\5",perl = TRUE,X246),as.character(X246))))),
+        X246 = str_replace_all(X246,"\\.{3} \\.{3}","... "),
+        X246 = gsub("( : )(.)",". \\U\\2",perl=TRUE,X246)) %>%
+ select(ZA_UWAGI, X246)
 
 #pole 500
 marc_field_500 <- data %>%
@@ -5841,16 +5917,6 @@ for (i in x) {
 #zasygnalizowanie obecności znaku # w opisie współtwórców
 polaczone$za_adnotacje <- ifelse(grepl("\\#",polaczone$za_opis_wspoltworcow),
                                    ifelse(nchar(polaczone$za_adnotacje)==0,"UWAGA! Ze względu na konflikt w opisie współtwórców wybierz właściwą wartość (strefa odpowiedzialności \"#\" współtwórcy z pola 700)",paste(polaczone$za_adnotacje,"UWAGA! Ze względu na konflikt w opisie współtwórców wybierz właściwą wartość (strefa odpowiedzialności # współtwórcy z pola 700)",sep = "# ")),as.character(polaczone$za_adnotacje))
-#korekta automatycznego IOK
-automatyczny_IOK <- polaczone %>%
-  mutate(czy_tyt_oryg = (!grepl("polsk",DZ_NAZWA)&!is.na(za_tytul_oryginalu))|grepl("polsk",DZ_NAZWA)) %>%
-  filter(za_adnotacje==""&am_nazwisko!="NA"&!grepl("pseud|nazw",za_opis_fizyczny_ksiazki)&!grepl("\\|",am_nazwisko)&czy_tyt_oryg==TRUE) %>%
-  select(rekord_BN) %>%
-  unique() %>%
-  filter(rekord_BN %notin% data$ZA_UWAGI[data$czy_automatycznie=="nie"]) %>%
-  mutate(powinno_byc = "IOK")
-#aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(automatyczny_IOK, "C:/Users/Cezary/Desktop/imp_2009_automatyczne_antologie.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 out <- cSplit(polaczone, c("am_autor_id", "am_nazwisko", "am_imie","os_osoba_id","os_nazwisko", "os_imie", "fo_symbol","wy_wydawnictwo_id","wy_miejsce","wy_nazwa"),sep = "|",direction = "long") %>%
   unique()
@@ -5941,9 +6007,7 @@ out$pracownik[out$same == 1] <- ""
 out$za_adnotacje[out$same == 1] <- ""
 out$BN_URL[out$same == 1] <- ""
 
-#przypisanie do automatycznego OK redaktora "automat"
 out <- out %>%
-  mutate(pracownik = ifelse(rekord_BN %in% automatyczny_IOK$rekord_BN,"AUTOMAT",as.character(pracownik))) %>%
   select(1:33)
 
 #pętla zapisująca po ok. 2000 wierszy z uwzględnieniem kompletności rekordów bibliograficznych rozpisanych na kilka wierszy
@@ -6145,7 +6209,7 @@ for (i in x) {
   string <- paste(string_a,string_b,string_c,sep = "")
   marc_field_246[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_246$X246),str_replace_all(gsub(string,"\\3",marc_field_246$X246),"\\${2}.", "~"),NA)
 }
-if("$n" %in% colnames(marc_field_245)) {
+if("$n" %in% colnames(marc_field_246)) {
 marc_field_246 <- marc_field_246[, colSums(is.na(marc_field_246)) != nrow(marc_field_246)] %>%
   filter(grepl("oryg",X246)) %>%
   select(ZA_UWAGI,`$a`,`$b`,`$n`,`$p`) %>%
@@ -6815,7 +6879,6 @@ for (i in x) {
 #zasygnalizowanie obecności znaku # w opisie współtwórców
 polaczone$za_adnotacje <- ifelse(grepl("\\#",polaczone$za_opis_wspoltworcow),
                                    ifelse(nchar(polaczone$za_adnotacje)==0,"UWAGA! Ze względu na konflikt w opisie współtwórców wybierz właściwą wartość (strefa odpowiedzialności \"#\" współtwórcy z pola 700).",paste(polaczone$za_adnotacje,"UWAGA! Ze względu na konflikt w opisie współtwórców wybierz właściwą wartość (strefa odpowiedzialności # współtwórcy z pola 700).",sep = "# ")),as.character(polaczone$za_adnotacje))
-#w antologii nie ma korekty automatycznego IOK
 
 out <- cSplit(polaczone, c("am_autor_id", "am_nazwisko", "am_imie","os_osoba_id","os_nazwisko", "os_imie", "fo_symbol","wy_wydawnictwo_id","wy_miejsce","wy_nazwa"),sep = "|",direction = "long") %>%
   unique()
@@ -6906,9 +6969,7 @@ out$pracownik[out$same == 1] <- ""
 out$za_adnotacje[out$same == 1] <- ""
 out$BN_URL[out$same == 1] <- ""
 
-#przypisanie do automatycznego OK redaktora "automat"
 out <- out %>%
-  mutate(pracownik = ifelse(rekord_BN %in% automatyczny_IOK$rekord_BN,"AUTOMAT",as.character(pracownik))) %>%
   select(1:33)
 
 #pętla zapisująca po ok. 2000 wierszy z uwzględnieniem kompletności rekordów bibliograficznych rozpisanych na kilka wierszy
@@ -6928,6 +6989,8 @@ for (i in x) {
 }
 ```
 
+bezpiecznik
+UWAGA!
 Najlpierw należy przeprowadzić import do bazy, a następnie egzekwować poniższą część kodu
 
 ```{r przygotowanie plików do masowego nadpisania statusu IOK}
