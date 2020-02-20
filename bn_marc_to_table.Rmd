@@ -48,7 +48,8 @@ data1 <- data1 %>%
   fill(rok) %>%
   fill(rok,.direction = "up") %>%
   ungroup() %>%
-  filter(rok == 2010) %>%#TUTAJ
+  filter(rok %in% (2011:2019)) %>%#TUTAJ
+  #filter(rok == 2010) %>%#TUTAJ
   select(-rok) %>%
   select(-2,-3) %>%
   mutate(field = str_replace_all(bn1, "(=)(\\w{3})(.*)", "\\2"),
@@ -87,7 +88,7 @@ if (nrow(data1)>0) {
 } 
 }
 data_full_table <- dcast(data_full, id ~ field, value.var="content")
-write.csv2(data_full_table, file = "C:/Users/User/Desktop/bn_books_2010.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(data_full_table, file = "C:/Users/User/Desktop/bn_ks_2011-2019.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 ```
 
