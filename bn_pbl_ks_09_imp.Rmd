@@ -1205,12 +1205,12 @@ wspolwydania_fix %$%
     {.} -> wspolwydania_fix$same
 wspolwydania_fix$same[1] <- 0
 wspolwydania_fix <- wspolwydania_fix %>% 
-  mutate(ZA_UWAGI = ifelse(same == 0, paste(ZA_UWAGI, "a", sep = ""), paste(ZA_UWAGI, "b", sep = ""))) %>% 
+  mutate(ZA_UWAGI = ifelse(same == 0, paste(rok,sprintf("%05d", as.integer(ZA_UWAGI)), "0", sep = ""), paste(rok,sprintf("%05d", as.integer(ZA_UWAGI)), "1", sep = ""))) %>% 
   select(-same)
 
 # połączenie zbiorów
 bn_ok <- bn_ok %>% 
-  mutate(ZA_UWAGI = as.character(ZA_UWAGI)) %>% 
+  mutate(ZA_UWAGI = paste(rok,sprintf("%05d", as.integer(ZA_UWAGI)),sep = "")) %>% 
   bind_rows(wspolwydania_fix)
 ```
 
@@ -2615,10 +2615,10 @@ for (i in x) {
 
 #jeśli nie ma działu lub rodzaju zapisu, to wpisać id i nazwę do ustalenia
 bn_ok <- bn_ok %>%
-  mutate(DZ_DZIAL_ID =ifelse(rodzaj_ksiazki!="współwydanie"&is.na(DZ_DZIAL_ID),0,as.integer(DZ_DZIAL_ID)),
-         DZ_NAZWA = ifelse(rodzaj_ksiazki!="współwydanie"&is.na(DZ_NAZWA),"-- do ustalenia --",as.character(DZ_NAZWA)),
-         RZ_RODZAJ_ID =ifelse(rodzaj_ksiazki!="współwydanie"&is.na(RZ_RODZAJ_ID),0,as.integer(RZ_RODZAJ_ID)),
-         RZ_NAZWA = ifelse(rodzaj_ksiazki!="współwydanie"&is.na(RZ_NAZWA),"-- do ustalenia --",as.character(RZ_NAZWA)))
+  mutate(DZ_DZIAL_ID =ifelse(is.na(DZ_DZIAL_ID),0,as.integer(DZ_DZIAL_ID)),
+         DZ_NAZWA = ifelse(is.na(DZ_NAZWA),"-- do ustalenia --",as.character(DZ_NAZWA)),
+         RZ_RODZAJ_ID =ifelse(is.na(RZ_RODZAJ_ID),0,as.integer(RZ_RODZAJ_ID)),
+         RZ_NAZWA = ifelse(is.na(RZ_NAZWA),"-- do ustalenia --",as.character(RZ_NAZWA)))
 
 #usunięcie nadwyżki z książek z działów IH
 slowniki_jezykowe_zle <- bn_ok %>% 
@@ -2671,6 +2671,26 @@ where z.za_uwagi like '%import%2020%'") %>%
 
 uzupelnienia <- bn_ok %>% 
   filter(BN_URL %notin% obiekt$ZA_URL_BN)
+
+
+kolejnosc <- c("pracownik","ZA_ZAPIS_ID","typ_ksiazki","link","link_1","rok","status","blad_w_imporcie_tytulu","X100","X245","X650","X655","X246","X250","X260","X300","X380","X490","X500","X501","X546","X600","X700","X041","X080")
+#aktualizacja - wpisać w selecie dla za_uwagi właściwą frazę dla rocznika, np. '%2010~%'
+rocznik_pbl_po_imporcie <- dbGetQuery(PBL,
+                                       "select z.za_zapis_id, z.za_status_imp, z.za_uwagi
+                                        from pbl_zapisy z
+                                        where za_uwagi like '%2020-02-19%'
+                                        and z.za_url_bn is not null") %>% 
+  mutate(ZA_UWAGI = str_extract(ZA_UWAGI,"(?<=BN: )(.*?)(?=, import)")) %>%
+  rename(status = ZA_STATUS_IMP) %>% 
+  left_join(.,uzupelnienia %>% select(pracownik = redaktor_dzialu,typ_ksiazki = rodzaj_ksiazki,link = BN_URL, rok, X100, X245, X650, X655, X246, X250, X260, X300, X380, X490, X500, X501, X546, X600, X700, X041, X080,ZA_UWAGI) %>% mutate(link_1 = paste("=HYPERLINK(\"",link,"\";\"link do książki w BN\")",sep = ""), blad_w_imporcie_tytulu = FALSE),by="ZA_UWAGI") %>% 
+  select(noquote(kolejnosc))
+#aktualizacja - wpisz właściwy rok w ścieżkę pliku
+write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Cezary/Desktop/ks_BN_2009_listy_pracowników.xlsx",sheetName = "listy_pracownikow")
+
+
+test <- uzupelnienia %>% select(pracownik = redaktor_dzialu,typ_ksiazki = rodzaj_ksiazki,link = BN_URL, rok, X100, X245, X650, X655, X246, X250, X260, X300, X380, X490, X500, X501, X546, X600, X700, X041, X080,ZA_UWAGI) %>% mutate(link_1 = paste("=HYPERLINK(\"",link,"\";\"link do książki w BN\")",sep = ""), blad_w_imporcie_tytulu = FALSE)
+
+
 ```
 
 
@@ -3699,8 +3719,6 @@ polaczone <- data %>%
   left_join(.,BN_URL,by = "ZA_UWAGI") %>%
   select(noquote(kolejnosc))
 colnames(polaczone) <- c("rekord_BN","rz_nazwa","za_ro_rok","za_type","rz_rodzaj_id","DZ_NAZWA","DZ_DZIAL_ID","tw_tworca_id","am_autor_id","am_nazwisko","am_imie","za_tytul","za_tytul_oryginalu","za_jezyk_oryginalu","os_osoba_id","os_nazwisko","os_imie","fo_symbol","za_opis_wspoltworcow","za_wydanie","za_tomy","za_instytucja","wy_wydawnictwo_id","wy_miejsce","wy_nazwa","za_rok_wydania","za_opis_fizyczny_ksiazki","za_seria_wydawnicza","tw_nazwisko","tw_imie","pracownik","za_adnotacje","BN_URL")
-polaczone <- polaczone %>% 
-  mutate(rekord_BN = paste(za_ro_rok,sprintf("%05d", as.integer(rekord_BN)),sep = "~"))
 
 #zasygnalizowanie niepoprawnego kodowania
 x <- 1:(length(polaczone)-2)
@@ -4814,8 +4832,6 @@ polaczone <- data %>%
   left_join(.,BN_URL,by = "ZA_UWAGI") %>%
   select(noquote(kolejnosc))
 colnames(polaczone) <- c("rekord_BN","rz_nazwa","za_ro_rok","za_type","rz_rodzaj_id","DZ_NAZWA","DZ_DZIAL_ID","tw_tworca_id","am_autor_id","am_nazwisko","am_imie","za_tytul","za_tytul_oryginalu","za_jezyk_oryginalu","os_osoba_id","os_nazwisko","os_imie","fo_symbol","za_opis_wspoltworcow","za_wydanie","za_tomy","za_instytucja","wy_wydawnictwo_id","wy_miejsce","wy_nazwa","za_rok_wydania","za_opis_fizyczny_ksiazki","za_seria_wydawnicza","tw_nazwisko","tw_imie","pracownik","za_adnotacje","BN_URL")
-polaczone <- polaczone %>% 
-  mutate(rekord_BN = paste(za_ro_rok,sprintf("%05d", as.integer(rekord_BN)),sep = "~"))
 
 #zasygnalizowanie niepoprawnego kodowania
 x <- 1:(length(polaczone)-2)
@@ -5889,8 +5905,6 @@ polaczone <- data %>%
   left_join(.,BN_URL,by = "ZA_UWAGI") %>%
   select(noquote(kolejnosc))
 colnames(polaczone) <- c("rekord_BN","rz_nazwa","za_ro_rok","za_type","rz_rodzaj_id","DZ_NAZWA","DZ_DZIAL_ID","tw_tworca_id","am_autor_id","am_nazwisko","am_imie","za_tytul","za_tytul_oryginalu","za_jezyk_oryginalu","os_osoba_id","os_nazwisko","os_imie","fo_symbol","za_opis_wspoltworcow","za_wydanie","za_tomy","za_instytucja","wy_wydawnictwo_id","wy_miejsce","wy_nazwa","za_rok_wydania","za_opis_fizyczny_ksiazki","za_seria_wydawnicza","tw_nazwisko","tw_imie","pracownik","za_adnotacje","BN_URL")
-polaczone <- polaczone %>% 
-  mutate(rekord_BN = paste(za_ro_rok,sprintf("%05d", as.integer(rekord_BN)),sep = "~"))
 
 #zasygnalizowanie niepoprawnego kodowania
 x <- 1:(length(polaczone)-2)
@@ -6851,8 +6865,6 @@ polaczone <- data %>%
   left_join(.,BN_URL,by = "ZA_UWAGI") %>%
   select(noquote(kolejnosc))
 colnames(polaczone) <- c("rekord_BN","rz_nazwa","za_ro_rok","za_type","rz_rodzaj_id","DZ_NAZWA","DZ_DZIAL_ID","tw_tworca_id","am_autor_id","am_nazwisko","am_imie","za_tytul","za_tytul_oryginalu","za_jezyk_oryginalu","os_osoba_id","os_nazwisko","os_imie","fo_symbol","za_opis_wspoltworcow","za_wydanie","za_tomy","za_instytucja","wy_wydawnictwo_id","wy_miejsce","wy_nazwa","za_rok_wydania","za_opis_fizyczny_ksiazki","za_seria_wydawnicza","tw_nazwisko","tw_imie","pracownik","za_adnotacje","BN_URL")
-polaczone <- polaczone %>% 
-  mutate(rekord_BN = paste(za_ro_rok, paste(sprintf("%05d", as.integer(str_extract(rekord_BN,"\\d+"))),str_extract(rekord_BN,".$"),sep = ""),sep = "~"))
 
 #zasygnalizowanie niepoprawnego kodowania
 x <- 1:(length(polaczone)-2)
@@ -7046,7 +7058,7 @@ rocznik_pbl_po_imporcie <- dbGetQuery(PBL,
                                         and z.za_url_bn is not null") %>% 
   mutate(ZA_UWAGI = str_extract(ZA_UWAGI,"(?<=BN: )(.*?)(?=, import)")) %>%
   rename(status = ZA_STATUS_IMP) %>% 
-  left_join(.,bn_ok %>% select(pracownik = redaktor_dzialu,typ_ksiazki = rodzaj_ksiazki,link = BN_URL, rok, X100, X245, X650, X655, X246, X250, X260, X300, X380, X490, X500, X501, X546, X600, X700, X041, X080,ZA_UWAGI) %>% mutate(link_1 = paste("=HYPERLINK(\"",link,"\";\"link do książki w BN\")",sep = ""), blad_w_imporcie_tytulu = FALSE, ZA_UWAGI = paste(rok,sprintf("%05d", as.integer(ZA_UWAGI)),sep = "~")),by="ZA_UWAGI") %>% 
+  left_join(.,bn_ok %>% select(pracownik = redaktor_dzialu,typ_ksiazki = rodzaj_ksiazki,link = BN_URL, rok, X100, X245, X650, X655, X246, X250, X260, X300, X380, X490, X500, X501, X546, X600, X700, X041, X080,ZA_UWAGI) %>% mutate(link_1 = paste("=HYPERLINK(\"",link,"\";\"link do książki w BN\")",sep = ""), blad_w_imporcie_tytulu = FALSE),by="ZA_UWAGI") %>% 
   select(noquote(kolejnosc))
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
 write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Cezary/Desktop/ks_BN_2009_listy_pracowników.xlsx",sheetName = "listy_pracownikow")
