@@ -19,13 +19,15 @@ PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "I
 #wgranie zbiorów książek
 #aktualizacja - wprowadź właściwą ścieżkę pliku (zmień rok)
 bn_ks <- read.csv2("C:/Users/Cezary/Downloads/bn_ks_2010.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
-  filter(!grepl("\\\\$aArtykuły|\\\\$Druki ulotne",X380)) %>%
-  filter(!grepl("\\$aNadbitki i odbitki",X655)) %>%
-  filter(grepl("Książki",X380,ignore.case = FALSE)|X380=="") %>%
-  filter(grepl("\\$aWA|\\$aW ",X040)) %>%
-  filter(X655!="\\7$aKomiks$2DBN") %>%
-  mutate(rok = str_sub(X008,8,11),
-         X245 = str_replace_all(X245," \\/ \\$c"," /$c"),
+  mutate(rok = str_sub(X008,8,11)) %>% 
+  #aktualizacja - wprowadź do filtra właściwy rok
+  filter(rok == 2010,
+         !grepl("\\\\$aArtykuły|\\\\$Druki ulotne",X380),
+         !grepl("\\$aNadbitki i odbitki",X655),
+         grepl("Książki",X380,ignore.case = FALSE)|X380=="",
+         grepl("\\$aWA|\\$aW ",X040),
+         X655!="\\7$aKomiks$2DBN") %>%
+  mutate(X245 = str_replace_all(X245," \\/ \\$c"," /$c"),
          BN_URL = paste("https://katalogi.bn.org.pl/discovery/fulldisplay?docid=alma",as.character(X009),"&context=L&vid=48OMNIS_NLOP:48OMNIS_NLOP&lang=pl",sep = ""),
          BN_URL = str_replace(BN_URL,"88&","66&"))
 
@@ -7088,4 +7090,12 @@ pbl_bn_viaf_import <- pbl_bn_viaf_import %>%
 write.xlsx(pbl_bn_viaf_import, "C:/Users/Cezary/Desktop/relacje_osobowe_pbl_bn.xlsx",sheetName = "pbl-bn")
 #następnie przeanalizować zawartość wkejonej części i zostawić "tak" w kolumnie F tylko dla poprawnych utożsamień (osoba w PBL to osoba w BN)
 ```
+
+```{r problemy}
+#skierować do na później większą liczbę rekordów - ogarnąć, jak to zrobić
+
+#automatyczne sugerowanie działu na podstawie 655 i 650 - lepiej nie usuwać tego, co powoduje błędy, tylko jakoś to włączyć do wyszukiwania
+
+```
+
 
