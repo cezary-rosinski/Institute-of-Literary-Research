@@ -6,12 +6,14 @@ UWAGA!
 Przed rozpoczęciem pracy zaktualizuj zgodnie z obecnym stanem bazy listę książek na dysku za poprzedni rocznik.
 Przed rozpoczęciem pracy wyszukaj frazy "bezpiecznik" i "aktualizacja".
 ```{r Wczytanie plików}
+#install.packages(c("utf8","googlesheets4","zoo","stringr","splitstackshape","plyr","dplyr","sqldf","stringdist","fuzzyjoin","data.table","svMisc","tidyverse","RJDBC","arrangements","tokenizers","openxlsx","jsonlite","pacman"))
+#devtools::install_github("r-lib/gargle")
+
 #biblioteki
 options(java.parameters = "-Xmx32000m")
 options(scipen = 999)
-pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,arrangements,tokenizers,openxlsx)
+pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,arrangements,tokenizers,openxlsx,jsonlite)
 `%notin%` <- Negate(`%in%`)
-
 #połączenie z bazą PBL
 jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Cezary/Downloads/ojdbc6.jar")
 PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "IBL_SELECT", "CR333444")
