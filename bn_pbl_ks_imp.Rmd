@@ -7,19 +7,6 @@ Przed rozpoczęciem pracy zaktualizuj zgodnie z obecnym stanem bazy listę ksią
 Przed rozpoczęciem pracy wyszukaj frazy "bezpiecznik" i "aktualizacja".
 ```{r Wczytanie plików}
 #install.packages(c("utf8","googlesheets4","zoo","stringr","splitstackshape","plyr","dplyr","sqldf","stringdist","fuzzyjoin","data.table","svMisc","tidyverse","RJDBC","arrangements","tokenizers","openxlsx","jsonlite","pacman"))
-
-install.packages("installr")
-library("installr")
-install.Rtools()
-install.packages("yaml")
-install.packages("devtools")
-install.packages("Rcpp")
-devtools::install_github("johndharrison/binman")
-devtools::install_github("johndharrison/wdman")
-devtools::install_github("ropensci/RSelenium")
-install.packages("rJava")
-Sys.setenv(JAVA_HOME = "C:/Program Files/Java/jdk1.8.0_101/")
-
 #devtools::install_github("r-lib/gargle")
 
 #biblioteki
@@ -28,12 +15,12 @@ options(scipen = 999)
 pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,arrangements,tokenizers,openxlsx,jsonlite)
 `%notin%` <- Negate(`%in%`)
 #połączenie z bazą PBL
-jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Cezary/Downloads/ojdbc6.jar")
+jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Nikodem/Downloads/ojdbc6.jar")
 PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "IBL_SELECT", "CR333444")
 
 #wgranie zbiorów książek
 #aktualizacja - wprowadź właściwą ścieżkę pliku (zmień rok)
-bn_ks <- read.csv2("C:/Users/Cezary/Downloads/bn_ks_2010.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
+bn_ks <- read.csv2("C:/Users/Nikodem/Downloads/bn_ks_2010.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
   mutate(rok = str_sub(X008,8,11)) %>% 
   #aktualizacja - wprowadź do filtra właściwy rok
   filter(rok == 2010,
@@ -911,16 +898,7 @@ bn_ok <- bn_ok %>%
 
 ###czy i jak automatyzować przedmiotową?
 
-#write.csv2(bn_ok, "C:/Users/Cezary/Desktop/bn_ok_2009.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
-```
-
-```{r problemy2}
-bn_ok <- bn_ok %>% 
-  bind_rows(na_pozniej)
-count <- as.data.frame(table(bn_ok$dziedzina_PBL,bn_ok$czy_automatycznie,bn_ok$rodzaj_ksiazki)) %>% 
-  filter(Freq!=0,
-         Var2=="nie") %>% 
-  arrange(-Freq)
+#write.csv2(bn_ok, "C:/Users/Nikodem/Desktop/bn_ok_2009.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 ```
 
 ```{r wyznaczenie zbioru do uzupełnienia w przyszłości}
@@ -937,7 +915,7 @@ na_pozniej <- bn_ok %>%
 #          lata_temat = ifelse(grepl("\\d{2}-",X600),str_replace(X600,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA)) %>%
 # filter((is.na(lata)&is.na(lata_temat))|!(as.integer(lata)<1800)|!(as.integer(lata_temat)<1800))
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(na_pozniej, "C:/Users/Cezary/Desktop/bn_2010_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(na_pozniej, "C:/Users/Nikodem/Desktop/bn_2010_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 bn_ok <- sqldf("select *
                from bn_ok a
@@ -1323,7 +1301,7 @@ PBL_literatury_obce <- PBL_dzialy_path %>%
   mutate(nazwa = substr(str_replace(DZ_NAZWA, "(.*?)( )(.*?)","\\3"),1,nchar(str_replace(DZ_NAZWA, "(.*?)( )(.*?)","\\3"))-1),
          nazwa = ifelse(nazwa=="romska (cygańska","romsk|cygańsk",as.character(nazwa)))
 
-reczne <- data.frame(DZ_DZIAL_ID = c(32,32,32,32,59,86,107,149,67,69,34,34,34,34,34,55,32,99,34),DZ_NAZWA = c("Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura grecka starożytna","Literatura łacińska średniowieczna","Literatura syryjska","Literatura esperanto","Literatura holenderska","Literatury Indii","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej", "Literatura egipsko-arabska", "Literatura brytyjska i irlandzka","Literatura palestyńsko-arabska","Literatury Afryki Subsaharyjskiej"), redaktor_dzialu = c("BEATAK","BEATAK","BEATAK","BEATAK","BEATAS","BEATAS","BEATAD","CEZARY","TOMASZU","EWA","EWA","EWA","EWA","EWA","EWA","BEATAD","BEATAK","BEATAD","EWA"), nazwa = c("angielsk","szkock","irlandzk","walijsk","greck","łacińsk","syryjsk","esperanck","niderlandzk","indyjsk","południowoafryka","senegalsk","nigeryjsk","afrykańsk","ruandyjsk","egipsk. nowożytn","celtyck","palestyńsk","somalijsk"))
+reczne <- data.frame(DZ_DZIAL_ID = c(32,32,32,32,59,86,107,149,67,69,34,34,34,34,34,55,32,99,34),DZ_NAZWA = c("Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura grecka starożytna","Literatura łacińska średniowieczna","Literatura syryjska","Literatura esperanto","Literatura holenderska","Literatury Indii","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej", "Literatura egipsko-arabska", "Literatura brytyjska i irlandzka","Literatura palestyńsko-arabska","Literatury Afryki Subsaharyjskiej"), redaktor_dzialu = c("BEATAK","BEATAK","BEATAK","BEATAK","BEATAS","BEATAS","BEATAD","Nikodem","TOMASZU","EWA","EWA","EWA","EWA","EWA","EWA","BEATAD","BEATAK","BEATAD","EWA"), nazwa = c("angielsk","szkock","irlandzk","walijsk","greck","łacińsk","syryjsk","esperanck","niderlandzk","indyjsk","południowoafryka","senegalsk","nigeryjsk","afrykańsk","ruandyjsk","egipsk. nowożytn","celtyck","palestyńsk","somalijsk"))
 
 PBL_literatury_obce <- rbind(PBL_literatury_obce,reczne)
 
@@ -1446,14 +1424,14 @@ deskryptory655 <- as.data.frame(table(deskryptory655$deskryptor655)) %>%
   mutate(X655 = str_remove_all(X655,"\\\\7\\$a"),
          X655 = str_remove_all(X655,"\\$2DBN"),
          X655 = str_replace_all(X655,"\\$.|\\|"," "),
-         X655 = str_replace_all(X655," ",".*")) %>%
+         X655 = str_replace_all(X655," ",".*"),
+         X655 = str_replace_all(X655, "[^\\p{L}\\d\\*\\.\\-\\s]", "")) %>%
   arrange(X655,-Freq,DZ_NAZWA)
 
 deskryptory655$id_grupy <- cumsum(!duplicated(deskryptory655[2]))
 deskryptory655 <- deskryptory655[!duplicated(deskryptory655$id_grupy),] %>%
   select(-id_grupy) %>%
-  arrange(-Freq) %>% 
-  filter(!grepl("\\[|\\(|\\\\",X655))
+  arrange(-Freq)
 
 x <- 1:length(deskryptory655$X655)
 test <- data.frame(stringsAsFactors = FALSE)
@@ -1506,14 +1484,14 @@ deskryptory650 <- as.data.frame(table(deskryptory650$deskryptor650)) %>%
          X650 = str_remove_all(X650,"\\$2DBN"),
          X650 = str_remove_all(X650,"\\\\\\\\"),
          X650 = str_replace_all(X650,"\\$.|\\|"," "),
-         X650 = str_replace_all(X650," ",".*")) %>%
+         X650 = str_replace_all(X650," ",".*"),
+         X650 = str_replace_all(X650, "[^\\p{L}\\d\\*\\.\\-\\s]", "")) %>%
   arrange(X650,-Freq,DZ_NAZWA)
 
 deskryptory650$id_grupy <- cumsum(!duplicated(deskryptory650[2]))
 deskryptory650 <- deskryptory650[!duplicated(deskryptory650$id_grupy),] %>%
   select(-id_grupy) %>%
-  arrange(-Freq) %>% 
-  filter(!grepl("\\[|\\(|\\\\",X650))
+  arrange(-Freq)
 
 x <- 1:length(deskryptory650$X650)
 test <- data.frame(stringsAsFactors = FALSE)
@@ -2168,7 +2146,7 @@ PBL_dzialy_antologie <- PBL_dzialy_path %>%
 
 PBL_dzialy_antologie <- sqldf("select *
                             from PBL_dzialy_antologie a
-                            left join BN_PBL_lista_literatur b on a.DZ_NAZWA like ('%'||b.nazwa_prosta||'%')") %>%
+                            left join (select c.ukd_ogolne,c.nazwa_prosta,c.pbl_id,c.pbl_nazwa,c.pbl_id_literatury,c.pbl_literatura from BN_PBL_lista_literatur c) b on a.DZ_NAZWA like ('%'||b.nazwa_prosta||'%')") %>%
   mutate(ukd_ogolne = ifelse(DZ_DZIAL_ID==146,"821.162.1",as.character(ukd_ogolne)),
          nazwa_prosta = ifelse(DZ_DZIAL_ID==146,"polsk",as.character(nazwa_prosta))) %>%
   filter(!is.na(ukd_ogolne)) %>%
@@ -3717,7 +3695,7 @@ automatyczny_IOK <- polaczone %>%
   filter(rekord_BN %notin% data$ZA_UWAGI[data$czy_automatycznie=="nie"]) %>%
   mutate(powinno_byc = "IOK")
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(automatyczny_IOK, "C:/Users/Cezary/Desktop/imp_2010_automatyczne_podmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(automatyczny_IOK, "C:/Users/Nikodem/Desktop/imp_2010_automatyczne_podmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 out <- cSplit(polaczone, c("am_autor_id", "am_nazwisko", "am_imie","os_osoba_id","os_nazwisko", "os_imie", "fo_symbol","wy_wydawnictwo_id","wy_miejsce","wy_nazwa"),sep = "|",direction = "long") %>%
   unique()
@@ -3826,7 +3804,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2010_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2010_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -4926,7 +4904,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2010_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2010_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -5999,7 +5977,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2010_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2010_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -6959,7 +6937,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2010_wspolwydanie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2010_wspolwydanie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -6971,7 +6949,7 @@ Najpierw należy przeprowadzić import do bazy, a następnie egzekwować poniżs
 #automatyczny IOK dla rekordów bibliograficznych
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
 
-nadpisanie_zapisow_IOK <- read.csv2("C:/Users/Cezary/Desktop/imp_2010_automatyczne_podmiotowe.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE)
+nadpisanie_zapisow_IOK <- read.csv2("C:/Users/Nikodem/Desktop/imp_2010_automatyczne_podmiotowe.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE)
 
 #aktualizacja - wpisać w selekcie dla za_uwagi właściwą frazę dla rocznika, np. 'BN: 2009%'
 nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
@@ -6985,7 +6963,7 @@ nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
   mutate(ID2 = NA) %>% 
   select(ZA_ZAPIS_ID,ID2,jest,powinno_byc)
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Cezary/Desktop/2010_nadpisanie_zapisow_IOK.xlsx",sheetName = "ZA_STATUS_IMP")
+write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Nikodem/Desktop/2010_nadpisanie_zapisow_IOK.xlsx",sheetName = "ZA_STATUS_IMP")
 
 #bezpiecznik
 #automatyczny IOK dla nowych twórców w kartotece powinien zostać przeprowadzony z poziomu importera
@@ -7014,7 +6992,7 @@ rocznik_pbl_po_imporcie <- dbGetQuery(PBL,
   select(noquote(kolejnosc))
 rocznik_pbl_po_imporcie$pracownik[rocznik_pbl_po_imporcie$status=="IOK"] <- "AUTOMAT"
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Cezary/Desktop/ks_BN_2010_listy_pracowników.xlsx",sheetName = "lista_ksiazek")
+write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Nikodem/Desktop/ks_BN_2010_listy_pracowników.xlsx",sheetName = "lista_ksiazek")
 #utwórz nowy podfolder w folderze importu BN i prześlij listę na dysk, przygotuj widoki filtrów dla wszystkich osób i roześlij unikatowe linki
 ```
 
@@ -7116,15 +7094,6 @@ pbl_bn_viaf_import <- pbl_bn_viaf_import %>%
   unique()
 
 #zapisać plik i jego treść wkleić na dysk do tabeli "mapowanie_osob_bn_pbl_po_imporcie"
-write.xlsx(pbl_bn_viaf_import, "C:/Users/Cezary/Desktop/relacje_osobowe_pbl_bn.xlsx",sheetName = "pbl-bn")
+write.xlsx(pbl_bn_viaf_import, "C:/Users/Nikodem/Desktop/relacje_osobowe_pbl_bn.xlsx",sheetName = "pbl-bn")
 #następnie przeanalizować zawartość wkejonej części i zostawić "tak" w kolumnie F tylko dla poprawnych utożsamień (osoba w PBL to osoba w BN)
 ```
-
-```{r problemy}
-#skierować do na później większą liczbę rekordów - ogarnąć, jak to zrobić
-
-#automatyczne sugerowanie działu na podstawie 655 i 650 - lepiej nie usuwać tego, co powoduje błędy, tylko jakoś to włączyć do wyszukiwania
-
-```
-
-
