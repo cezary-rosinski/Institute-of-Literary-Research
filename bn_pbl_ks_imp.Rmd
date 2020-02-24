@@ -7,6 +7,19 @@ Przed rozpoczęciem pracy zaktualizuj zgodnie z obecnym stanem bazy listę ksią
 Przed rozpoczęciem pracy wyszukaj frazy "bezpiecznik" i "aktualizacja".
 ```{r Wczytanie plików}
 #install.packages(c("utf8","googlesheets4","zoo","stringr","splitstackshape","plyr","dplyr","sqldf","stringdist","fuzzyjoin","data.table","svMisc","tidyverse","RJDBC","arrangements","tokenizers","openxlsx","jsonlite","pacman"))
+
+install.packages("installr")
+library("installr")
+install.Rtools()
+install.packages("yaml")
+install.packages("devtools")
+install.packages("Rcpp")
+devtools::install_github("johndharrison/binman")
+devtools::install_github("johndharrison/wdman")
+devtools::install_github("ropensci/RSelenium")
+install.packages("rJava")
+Sys.setenv(JAVA_HOME = "C:/Program Files/Java/jdk1.8.0_101/")
+
 #devtools::install_github("r-lib/gargle")
 
 #biblioteki
@@ -901,14 +914,28 @@ bn_ok <- bn_ok %>%
 #write.csv2(bn_ok, "C:/Users/Cezary/Desktop/bn_ok_2009.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 ```
 
+```{r problemy2}
+bn_ok <- bn_ok %>% 
+  bind_rows(na_pozniej)
+count <- as.data.frame(table(bn_ok$dziedzina_PBL,bn_ok$czy_automatycznie,bn_ok$rodzaj_ksiazki)) %>% 
+  filter(Freq!=0,
+         Var2=="nie") %>% 
+  arrange(-Freq)
+```
+
 ```{r wyznaczenie zbioru do uzupełnienia w przyszłości}
+#bezpiecznik
+#propozycja, by kierować na później wszystkie książki przedmiotowe z dziedziny "bez_ukd_PBL"
 na_pozniej <- bn_ok %>%
-  filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL=="bez_ukd_PBL") %>%
-  mutate(kategorie_literackie = ifelse(grepl("mitolog|baś|bajk|poezj|liryk|epik|dramat|literac|literat|pisar|wiersz|proz|powieś|opowiad|miniatur|aforyzm|esej|szkic|feliet|report|dzienni|wspomnie|autobiograf|kaza|rozmyśl|list|interpretacj",X650,ignore.case = TRUE)|grepl("mitolog|baś|bajk|poezj|liryk|epik|dramat|literac|literat|pisar|wiersz|proz|powieś|opowiad|miniatur|aforyzm|esej|szkic|feliet|report|dzienni|wspomnie|autobiograf|kaza|rozmyśl|list|interpretacj",X655, ignore.case = TRUE),"tak","nie")) %>%
-  filter(kategorie_literackie=="nie") %>%
-  mutate(lata = ifelse(grepl("\\d{2}-",X100),str_replace(X100,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA),
-         lata_temat = ifelse(grepl("\\d{2}-",X600),str_replace(X600,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA)) %>%
-filter((is.na(lata)&is.na(lata_temat))|!(as.integer(lata)<1800)|!(as.integer(lata_temat)<1800))
+  filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL=="bez_ukd_PBL")
+#stara operacja
+# na_pozniej <- bn_ok %>%
+#   filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL=="bez_ukd_PBL") %>%
+#   mutate(kategorie_literackie = ifelse(grepl("mitolog|baś|bajk|poezj|liryk|epik|dramat|literac|literat|pisar|wiersz|proz|powieś|opowiad|miniatur|aforyzm|esej|szkic|feliet|report|dzienni|wspomnie|autobiograf|kaza|rozmyśl|list|interpretacj",X650,ignore.case = TRUE)|grepl("mitolog|baś|bajk|poezj|liryk|epik|dramat|literac|literat|pisar|wiersz|proz|powieś|opowiad|miniatur|aforyzm|esej|szkic|feliet|report|dzienni|wspomnie|autobiograf|kaza|rozmyśl|list|interpretacj",X655, ignore.case = TRUE),"tak","nie")) %>%
+#   filter(kategorie_literackie=="nie") %>%
+#   mutate(lata = ifelse(grepl("\\d{2}-",X100),str_replace(X100,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA),
+#          lata_temat = ifelse(grepl("\\d{2}-",X600),str_replace(X600,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA)) %>%
+# filter((is.na(lata)&is.na(lata_temat))|!(as.integer(lata)<1800)|!(as.integer(lata_temat)<1800))
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
 write.csv2(na_pozniej, "C:/Users/Cezary/Desktop/bn_2010_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
