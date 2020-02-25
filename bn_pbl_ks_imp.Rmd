@@ -16,12 +16,12 @@ options(scipen = 999)
 pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,arrangements,tokenizers,openxlsx,jsonlite)
 `%notin%` <- Negate(`%in%`)
 #połączenie z bazą PBL
-jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Nikodem/Downloads/ojdbc6.jar")
+jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Cezary/Downloads/ojdbc6.jar")
 PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "IBL_SELECT", "CR333444")
 
 #wgranie zbiorów książek
 #aktualizacja - wprowadź właściwą ścieżkę pliku (zmień rok)
-bn_ks <- read.csv2("C:/Users/Nikodem/Downloads/bn_ks_2011.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
+bn_ks <- read.csv2("C:/Users/Cezary/Downloads/bn_ks_2011.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
   mutate(rok = str_sub(X008,8,11)) %>% 
   #aktualizacja - wprowadź do filtra właściwy rok
   filter(rok == 2011,
@@ -100,9 +100,11 @@ bn_ks <- bn_ks %>%
   mutate(X100 = drugi_autor$X100,
          X700 = drugi_autor$X700)
 ##koniec przenosin
+chunk1 <- bn_ks
 ```
 
 ```{r generowanie listy zapisow z osobami PBL}
+bn_ks <- chunk1
 #wczytanie listy utożsamionych twórców z autorami BN
 #bezpiecznik: użyć sheets_auth() z konsoli
 pbl_viaf <- sheets_read(ss = "1cEz73dGN2r2-TTc702yne9tKfH9PQ6UyAJ2zBSV6Jb0") %>%
@@ -270,11 +272,12 @@ bn_ks <- bn_ks %>%
 
 bezpiecznik <- bn_ks %>% 
   filter(osoba_bn_autor=="NA")
+chunk2 <- bn_ks
 ```
 
 ```{r dalsze przygotowanie zbioru do importu - UKD, słowa kluczowe, poloniki}
 #wskazanie interesujących PBL dziedzin wiedzy po UKD i określenie typu UKD
-bn_ks <- bn_ks %>%
+bn_ks <- chunk2 %>%
   mutate(dziedzina_PBL = ifelse(str_detect(X080,"(?<=\\$a|:|\\[|\\+|\\()(82)"),"ukd_lit",
                                 ifelse(str_detect(X080,"(?<=\\$a|:|\\[|\\+)(791)")|str_detect(X080,"(?<=\\$a|:)(792)")|str_detect(X080,"\\$a7\\.09"),"ukd_tfrtv",
                                        ifelse(str_detect(X080,"(?<=\\$a01)(\\(|\\/|2|4|5|9)")|str_detect(X080,"(?<=\\$a|\\[])(050)")|str_detect(X080,"(?<=\\$a|:|\\[|\\+|\\()(811\\.162)"),"ukd_biblio",
@@ -540,9 +543,11 @@ ks_zabawki <- bn_ok %>%
 bn_ok <- sqldf("select *
                from bn_ok a
                where a.id not in (select b.id from ks_zabawki b)")
+chunk3 <- bn_ok
 ```
 
 ```{r automatyczne usunięcie INO na podstawie wcześniejszych importów}
+bn_ok <- chunk3
 #pobranie starych list książek z importu
 #aktualizacja - uzupełnij ostatni brakujący zaimportowany rocznik
 listy_2010 <- sheets_read(ss = "1Vjeg0JsYI-8v9B-x_yyujIhmw7UR7Lk7poexrHNdVzM", sheet = "lista_ksiazek")
@@ -679,9 +684,11 @@ reszta <- sqldf("select *
                where a.id not in 
                (select b.id
                from bn_ok b)")
+chunk4 <- bn_ok
 ```
 
 ```{r przypisanie książce rodzaju (podmiotowa, przedmiotowa, antologie, współwydanie)}
+bn_ok <- chunk4
 stare_rodzajowanie <- bn_ok %>%
   mutate(czy_ma_ukd = ifelse(X080=="","nie","tak"),
          position_dash = ifelse(grepl("(\\\\\\\\\\$a|:)(821\\.)",X080),str_locate(X080,"\\-")[,1], NA),
@@ -821,9 +828,11 @@ bn_ok <- bn_ok %>%
   mutate(rodzaj_ksiazki = ifelse(id %in% marc_field_100$id, "podmiotowa", as.character(rodzaj_ksiazki)),
          rodzaj_ksiazki = ifelse(id %in% stare_rodzajowanie$id, "przedmiotowa",as.character(rodzaj_ksiazki)),
          rodzaj_ksiazki = ifelse(X080=="\\\\$a82-1/-9(0.054)"&rodzaj_ksiazki=="przedmiotowa"&!grepl("xhistoria|xtematyka|xbiografia",X650)&!grepl("xhistoria|xtematyka|xbiografia",X655),"podmiotowa",as.character(rodzaj_ksiazki)))
+chunk5 <- bn_ok
 ```
 
 ```{r wyznaczenie zbioru automatycznie IOK}
+bn_ok <- chunk5
 IOK_podm <- bn_ok %>%
   filter(!grepl("\\$t",X700)) %>%
   mutate(ile_gatunkow = ifelse(rodzaj_ksiazki=="podmiotowa",str_count(X655,"\\$a"),"nie"),
@@ -901,10 +910,12 @@ bn_ok <- bn_ok %>%
 
 ###czy i jak automatyzować przedmiotową?
 
-#write.csv2(bn_ok, "C:/Users/Nikodem/Desktop/bn_ok_2009.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+#write.csv2(bn_ok, "C:/Users/Cezary/Desktop/bn_ok_2009.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+chunk6 <- bn_ok
 ```
 
 ```{r wyznaczenie zbioru do uzupełnienia w przyszłości}
+bn_ok <- chunk6
 #bezpiecznik
 #propozycja, by kierować na później wszystkie książki przedmiotowe z dziedziny "bez_ukd_PBL"
 na_pozniej <- bn_ok %>%
@@ -918,11 +929,12 @@ na_pozniej <- bn_ok %>%
 #          lata_temat = ifelse(grepl("\\d{2}-",X600),str_replace(X600,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA)) %>%
 # filter((is.na(lata)&is.na(lata_temat))|!(as.integer(lata)<1800)|!(as.integer(lata_temat)<1800))
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(na_pozniej, "C:/Users/Nikodem/Desktop/bn_2011_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(na_pozniej, "C:/Users/Cezary/Desktop/bn_2011_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 bn_ok <- sqldf("select *
                from bn_ok a
                where a.id not in (select b.id from na_pozniej b)")
+chunk7 <- bn_ok
 ```
 
 Czy jest sens to robić?
@@ -1122,6 +1134,7 @@ colnames(PBL_hasla_osobowe) <- c("DZ_DZIAL_ID","DZ_NAZWA","redaktor_dzialu","naz
 ```
 
 ```{r przygotowanie współwydań}
+bn_ok <- chunk7
 # podzielenie unikatowych rekordów bn na dwa wiersze w tabeli, z których powstaną dwa rekordy pbl
 bn_ok <- bn_ok %>%
   mutate(ZA_UWAGI = 1:nrow(.))
@@ -1195,10 +1208,12 @@ wspolwydania_fix <- wspolwydania_fix %>%
 bn_ok <- bn_ok %>% 
   mutate(ZA_UWAGI = paste(rok,sprintf("%05d", as.integer(ZA_UWAGI)),sep = "")) %>% 
   bind_rows(wspolwydania_fix)
+chunk10 <- bn_ok
 ```
 
 
 ```{r przypisanie redaktorów do przedmiotowej, podmiotowej i antologii}
+chunk10 <- bn_ok
 przedmiotowa_redaktorzy <- bn_ok %>%
   filter(rodzaj_ksiazki=="przedmiotowa")
 ###przypisanie redaktora na podstawie osoby z 600 jako tematu - książki o twórcy
@@ -1304,7 +1319,7 @@ PBL_literatury_obce <- PBL_dzialy_path %>%
   mutate(nazwa = substr(str_replace(DZ_NAZWA, "(.*?)( )(.*?)","\\3"),1,nchar(str_replace(DZ_NAZWA, "(.*?)( )(.*?)","\\3"))-1),
          nazwa = ifelse(nazwa=="romska (cygańska","romsk|cygańsk",as.character(nazwa)))
 
-reczne <- data.frame(DZ_DZIAL_ID = c(32,32,32,32,59,86,107,149,67,69,34,34,34,34,34,55,32,99,34),DZ_NAZWA = c("Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura grecka starożytna","Literatura łacińska średniowieczna","Literatura syryjska","Literatura esperanto","Literatura holenderska","Literatury Indii","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej", "Literatura egipsko-arabska", "Literatura brytyjska i irlandzka","Literatura palestyńsko-arabska","Literatury Afryki Subsaharyjskiej"), redaktor_dzialu = c("BEATAK","BEATAK","BEATAK","BEATAK","BEATAS","BEATAS","BEATAD","Nikodem","TOMASZU","EWA","EWA","EWA","EWA","EWA","EWA","BEATAD","BEATAK","BEATAD","EWA"), nazwa = c("angielsk","szkock","irlandzk","walijsk","greck","łacińsk","syryjsk","esperanck","niderlandzk","indyjsk","południowoafryka","senegalsk","nigeryjsk","afrykańsk","ruandyjsk","egipsk. nowożytn","celtyck","palestyńsk","somalijsk"))
+reczne <- data.frame(DZ_DZIAL_ID = c(32,32,32,32,59,86,107,149,67,69,34,34,34,34,34,55,32,99,34),DZ_NAZWA = c("Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura grecka starożytna","Literatura łacińska średniowieczna","Literatura syryjska","Literatura esperanto","Literatura holenderska","Literatury Indii","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej", "Literatura egipsko-arabska", "Literatura brytyjska i irlandzka","Literatura palestyńsko-arabska","Literatury Afryki Subsaharyjskiej"), redaktor_dzialu = c("BEATAK","BEATAK","BEATAK","BEATAK","BEATAS","BEATAS","BEATAD","Cezary","TOMASZU","EWA","EWA","EWA","EWA","EWA","EWA","BEATAD","BEATAK","BEATAD","EWA"), nazwa = c("angielsk","szkock","irlandzk","walijsk","greck","łacińsk","syryjsk","esperanck","niderlandzk","indyjsk","południowoafryka","senegalsk","nigeryjsk","afrykańsk","ruandyjsk","egipsk. nowożytn","celtyck","palestyńsk","somalijsk"))
 
 PBL_literatury_obce <- rbind(PBL_literatury_obce,reczne)
 
@@ -2636,6 +2651,7 @@ slowniki_biograficzne_zle <- bn_ok %>%
 bn_ok <- bn_ok %>%
   filter(ZA_UWAGI %notin% slowniki_jezykowe_zle$ZA_UWAGI) %>% 
   filter(ZA_UWAGI %notin% slowniki_biograficzne_zle$ZA_UWAGI)
+chunk11 <- bn_ok
 ```
 
 ```{r statystyki pracowników}
@@ -2652,6 +2668,7 @@ count2 <- as.data.frame(table(bn_ok$czy_automatycznie))
 ```
 
 ```{r książki podmiotowe}
+bn_ok <- chunk11
 data <- bn_ok %>%
   filter(rodzaj_ksiazki=="podmiotowa") %>%
   mutate(redaktor_dzialu = paste(redaktor_dzialu,"_podm",sep = ""))
@@ -3509,7 +3526,8 @@ for (i in x) {
   marc_field_500[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_500$X500),str_replace_all(gsub(string,"\\3",marc_field_500$X500),"\\${2}.", "~"),NA)
 }
 marc_field_500 <- marc_field_500 %>%
-  filter(!grepl("oryg(\\.|\\,)",X500)&grepl("pseud|nazwa|dotycz|pol",X500,ignore.case = TRUE)) %>%
+  mutate(`$a` = ifelse(grepl("oryg(\\.|\\,)",X500)&grepl("pseud|nazwa",X500,ignore.case = TRUE),str_replace(`$a`,"(^.*?)(\\. )(\\p{Lu}.*$)","\\3"),as.character(`$a`))) %>% 
+  filter(!grepl("oryg(\\.|\\,)",`$a`)&grepl("pseud|nazwa|dotycz|pol",`$a`,ignore.case = TRUE)) %>%
   mutate(`$a` = str_remove(`$a`," \\;+$| \\:+$"))
   
 #pole 546 do opisu fizycznego
@@ -3712,7 +3730,7 @@ automatyczny_IOK <- polaczone %>%
   filter(rekord_BN %notin% data$ZA_UWAGI[data$czy_automatycznie=="nie"]) %>%
   mutate(powinno_byc = "IOK")
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(automatyczny_IOK, "C:/Users/Nikodem/Desktop/imp_2011_automatyczne_podmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(automatyczny_IOK, "C:/Users/Cezary/Desktop/imp_2011_automatyczne_podmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 out <- cSplit(polaczone, c("am_autor_id", "am_nazwisko", "am_imie","os_osoba_id","os_nazwisko", "os_imie", "fo_symbol","wy_wydawnictwo_id","wy_miejsce","wy_nazwa"),sep = "|",direction = "long") %>%
   unique()
@@ -3821,11 +3839,12 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2011_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2011_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
 ```{r książki przedmiotowe}
+bn_ok <- chunk11
 data <- bn_ok %>%
   filter(rodzaj_ksiazki=="przedmiotowa") %>%
   mutate(redaktor_dzialu = paste(redaktor_dzialu,"_przedm",sep = ""))
@@ -4622,7 +4641,8 @@ for (i in x) {
   marc_field_500[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_500$X500),str_replace_all(gsub(string,"\\3",marc_field_500$X500),"\\${2}.", "~"),NA)
 }
 marc_field_500 <- marc_field_500 %>%
-  filter(!grepl("oryg(\\.|\\,)",X500)&grepl("pseud|nazwa|dotycz|pol",X500,ignore.case = TRUE)) %>%
+  mutate(`$a` = ifelse(grepl("oryg(\\.|\\,)",X500)&grepl("pseud|nazwa",X500,ignore.case = TRUE),str_replace(`$a`,"(^.*?)(\\. )(\\p{Lu}.*$)","\\3"),as.character(`$a`))) %>% 
+  filter(!grepl("oryg(\\.|\\,)",`$a`)&grepl("pseud|nazwa|dotycz|pol",`$a`,ignore.case = TRUE)) %>%
   mutate(`$a` = str_remove(`$a`," \\;+$| \\:+$"))
   
 #pole 546 do opisu fizycznego
@@ -4921,11 +4941,12 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2011_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2011_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
 ```{r książki antologie}
+bn_ok <- chunk11
 data <- bn_ok %>%
   filter(rodzaj_ksiazki=="antologia") %>%
   mutate(redaktor_dzialu = paste(redaktor_dzialu,"_ant",sep = ""))
@@ -5699,7 +5720,8 @@ for (i in x) {
   marc_field_500[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_500$X500),str_replace_all(gsub(string,"\\3",marc_field_500$X500),"\\${2}.", "~"),NA)
 }
 marc_field_500 <- marc_field_500 %>%
-  filter(!grepl("oryg(\\.|\\,)",X500)&grepl("pseud|nazwa|dotycz|pol",X500,ignore.case = TRUE)) %>%
+  mutate(`$a` = ifelse(grepl("oryg(\\.|\\,)",X500)&grepl("pseud|nazwa",X500,ignore.case = TRUE),str_replace(`$a`,"(^.*?)(\\. )(\\p{Lu}.*$)","\\3"),as.character(`$a`))) %>% 
+  filter(!grepl("oryg(\\.|\\,)",`$a`)&grepl("pseud|nazwa|dotycz|pol",`$a`,ignore.case = TRUE)) %>%
   mutate(`$a` = str_remove(`$a`," \\;+$| \\:+$"))
   
 #pole 546 do opisu fizycznego
@@ -5994,11 +6016,12 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2011_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2011_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
 ```{r książki współwydania}
+bn_ok <- chunk11
 data <- bn_ok %>%
   filter(rodzaj_ksiazki=="współwydanie") %>%
   mutate(redaktor_dzialu = paste(redaktor_dzialu,"_wsp",sep = ""))
@@ -6622,7 +6645,8 @@ for (i in x) {
   marc_field_500[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_500$X500),str_replace_all(gsub(string,"\\3",marc_field_500$X500),"\\${2}.", "~"),NA)
 }
 marc_field_500 <- marc_field_500 %>%
-  filter(!grepl("oryg(\\.|\\,)",X500)&grepl("pseud|nazwa|dotycz|pol",X500,ignore.case = TRUE)) %>%
+  mutate(`$a` = ifelse(grepl("oryg(\\.|\\,)",X500)&grepl("pseud|nazwa",X500,ignore.case = TRUE),str_replace(`$a`,"(^.*?)(\\. )(\\p{Lu}.*$)","\\3"),as.character(`$a`))) %>% 
+  filter(!grepl("oryg(\\.|\\,)",`$a`)&grepl("pseud|nazwa|dotycz|pol",`$a`,ignore.case = TRUE)) %>%
   mutate(`$a` = str_remove(`$a`," \\;+$| \\:+$"))
   
 #pole 546 do opisu fizycznego
@@ -6954,7 +6978,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2011_wspolwydanie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2011_wspolwydanie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -6966,7 +6990,7 @@ Najpierw należy przeprowadzić import do bazy, a następnie egzekwować poniżs
 #automatyczny IOK dla rekordów bibliograficznych
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
 
-nadpisanie_zapisow_IOK <- read.csv2("C:/Users/Nikodem/Desktop/imp_2011_automatyczne_podmiotowe.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE)
+nadpisanie_zapisow_IOK <- read.csv2("C:/Users/Cezary/Desktop/imp_2011_automatyczne_podmiotowe.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE)
 
 #aktualizacja - wpisać w selekcie dla za_uwagi właściwą frazę dla rocznika, np. 'BN: 2009%'
 nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
@@ -6980,7 +7004,7 @@ nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
   mutate(ID2 = NA) %>% 
   select(ZA_ZAPIS_ID,ID2,jest,powinno_byc)
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Nikodem/Desktop/2011_nadpisanie_zapisow_IOK.xlsx",sheetName = "ZA_STATUS_IMP")
+write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Cezary/Desktop/2011_nadpisanie_zapisow_IOK.xlsx",sheetName = "ZA_STATUS_IMP")
 
 #bezpiecznik
 #automatyczny IOK dla nowych twórców w kartotece powinien zostać przeprowadzony z poziomu importera
@@ -6995,7 +7019,7 @@ write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Nikodem/Desktop/2011_nadpisanie_zap
 ```{r przygotowanie list pracowników}
 #docelowo przygotowujemy plik od razu na dysk, ale na razie xlsx do wgrania na dysk (brak funkcjonalności googlesheets4)
 #po tym przygotować na dysku unikatowe linki
-
+bn_ok <- chunk11
 kolejnosc <- c("pracownik","ZA_ZAPIS_ID","typ_ksiazki","link","link_1","rok","status","blad_w_imporcie_tytulu","X100","X245","X650","X655","X246","X250","X260","X300","X380","X490","X500","X501","X546","X600","X700","X041","X080")
 #aktualizacja - wpisać w selekcie dla za_uwagi właściwą frazę dla rocznika, np. 'BN: 2010%'
 rocznik_pbl_po_imporcie <- dbGetQuery(PBL,
@@ -7009,7 +7033,7 @@ rocznik_pbl_po_imporcie <- dbGetQuery(PBL,
   select(noquote(kolejnosc))
 rocznik_pbl_po_imporcie$pracownik[rocznik_pbl_po_imporcie$status=="IOK"] <- "AUTOMAT"
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Nikodem/Desktop/ks_BN_2011_listy_pracowników.xlsx",sheetName = "lista_ksiazek")
+write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Cezary/Desktop/ks_BN_2011_listy_pracowników.xlsx",sheetName = "lista_ksiazek")
 #utwórz nowy podfolder w folderze importu BN i prześlij listę na dysk, przygotuj widoki filtrów dla wszystkich osób i roześlij unikatowe linki
 ```
 
@@ -7017,7 +7041,7 @@ write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Nikodem/Desktop/ks_BN_2011_listy_p
 #TUTAJ - zrobić dopiero po imporcie 2010!!!
 #bazować na bn_ok z zapytaniem SQL dzięki zawartości pola bn rekord
 #zaktualizować plik na dysku: "mapowanie_osob_bn_pbl_po_imporcie" o nowe relacje osobowe pbl-bn
-
+bn_ok <- chunk11
 nowe_relacje <- bn_ok %>% 
   filter(is.na(TW_TWORCA_ID)&!is.na(TW_NAZWISKO)) %>% 
   select(X100,TW_NAZWISKO,TW_IMIE) %>% 
@@ -7111,7 +7135,7 @@ pbl_bn_viaf_import <- pbl_bn_viaf_import %>%
   unique()
 
 #zapisać plik i jego treść wkleić na dysk do tabeli "mapowanie_osob_bn_pbl_po_imporcie"
-write.xlsx(pbl_bn_viaf_import, "C:/Users/Nikodem/Desktop/relacje_osobowe_pbl_bn.xlsx",sheetName = "pbl-bn")
+write.xlsx(pbl_bn_viaf_import, "C:/Users/Cezary/Desktop/relacje_osobowe_pbl_bn.xlsx",sheetName = "pbl-bn")
 #następnie przeanalizować zawartość wkejonej części i zostawić "tak" w kolumnie F tylko dla poprawnych utożsamień (osoba w PBL to osoba w BN)
 ```
 
