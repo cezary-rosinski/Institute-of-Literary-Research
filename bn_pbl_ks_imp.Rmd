@@ -3,6 +3,7 @@ title: "R Notebook"
 output: html_notebook
 ---
 UWAGA!
+Wyczyścić listę mapowanie_osob_bn_pbl_po_imporcie (za dużo niepoprawnych relacji pbl-bn po ostatnim imporcie)
 Przed rozpoczęciem pracy zaktualizuj zgodnie z obecnym stanem bazy listę książek na dysku za poprzedni rocznik.
 Przed rozpoczęciem pracy wyszukaj frazy "bezpiecznik" i "aktualizacja".
 ```{r Wczytanie plików}
@@ -20,10 +21,10 @@ PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "I
 
 #wgranie zbiorów książek
 #aktualizacja - wprowadź właściwą ścieżkę pliku (zmień rok)
-bn_ks <- read.csv2("C:/Users/Nikodem/Downloads/bn_ks_2010.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
+bn_ks <- read.csv2("C:/Users/Nikodem/Downloads/bn_ks_2011.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
   mutate(rok = str_sub(X008,8,11)) %>% 
   #aktualizacja - wprowadź do filtra właściwy rok
-  filter(rok == 2010,
+  filter(rok == 2011,
          !grepl("\\\\$aArtykuły|\\\\$Druki ulotne",X380),
          !grepl("\\$aNadbitki i odbitki",X655),
          grepl("Książki",X380,ignore.case = FALSE)|X380=="",
@@ -103,6 +104,7 @@ bn_ks <- bn_ks %>%
 
 ```{r generowanie listy zapisow z osobami PBL}
 #wczytanie listy utożsamionych twórców z autorami BN
+#bezpiecznik: użyć sheets_auth() z konsoli
 pbl_viaf <- sheets_read(ss = "1cEz73dGN2r2-TTc702yne9tKfH9PQ6UyAJ2zBSV6Jb0") %>%
   filter(czy_ten_sam!="nie") %>%
   select(pbl_id, BN_id, BN_name) %>%
@@ -263,6 +265,9 @@ bn_ks <- bn_ks %>%
 #jeśli obiekt bezpiecznik jest pusty - to wszystko okej
 # sprawdz czy id tworcy z ktorejs tabeli na dysku istnieje w bazie oracle, jesli nie, wklej id tworcy z oracla do tabeli lub - jeśli nie ma takiego twórcy w bazie usuń wiersz w tabeli. Następnie dopisz fragment kodu, by usunąć kolumny osoba_bn_autor i osoba_bn_temat (po tej operacji usuń dopisany kod) i uruchom chunk ponownie
 
+# bn_ks <- bn_ks %>% 
+#   select(-osoba_bn_autor,-osoba_bn_temat)
+
 bezpiecznik <- bn_ks %>% 
   filter(osoba_bn_autor=="NA")
 ```
@@ -342,7 +347,7 @@ bn_ks <- bn_ks %>%
 bn_ok <- bn_ks %>%
   filter(!((is.na(osoba_bn_autor)&is.na(osoba_bn_temat))&dziedzina_PBL=="bez_ukd_PBL"&is.na(bez_ukd_ale_PBL)&is.na(czy_wspomnienia_reportaz)&is.na(slowa_literackie)&is.na(czy_biblia)))
 
-#czy tu usunąć zdublowane isbny?
+#usuwanie zdublowanych książek
 #020
 marc_field_020 <- bn_ok %>%
   select(id,X020)%>%
@@ -435,10 +440,8 @@ for (i in x) {
   permutations <- rbind(permutations,iteration)
 }
 
-#permutations <- permutations %>%
-#  filter(distance==1)
 permutations <- permutations %>%
-  filter(distance<1)
+  filter(distance<=1)
 
 distance2 <- distance2 %>%
   filter(id_grupy %in% permutations$id_grupy) %>%
@@ -517,9 +520,6 @@ nie_poloniki <- bn_ok %>%
   mutate(czy_polonik = "nie") %>%
   unique()
 
-#na postawie wystąpień twórców pbl w polach uwag
-#czy warto? co zrobić z case insensitivenes? --> za dużo śmieci wpada, zrezygnowałem z tego
-
 bn_ok <- bn_ok %>%
   full_join(.,nie_poloniki,by = "id") %>%
   select(id, X008, X009, X041, X044, X080, X100, X245, X246, X250, X260, X300, X380, X386, X490, X500, X501, X500, X546, X600, X650, X655, X700, X710, X800, X830, rok, BN_URL, osoba_bn_autor, osoba_bn_temat, dziedzina_PBL, bez_ukd_ale_PBL, czy_wspomnienia_reportaz, slowa_literackie, czy_polonik, czy_biblia) %>%
@@ -545,6 +545,7 @@ bn_ok <- sqldf("select *
 ```{r automatyczne usunięcie INO na podstawie wcześniejszych importów}
 #pobranie starych list książek z importu
 #aktualizacja - uzupełnij ostatni brakujący zaimportowany rocznik
+listy_2010 <- sheets_read(ss = "1Vjeg0JsYI-8v9B-x_yyujIhmw7UR7Lk7poexrHNdVzM", sheet = "lista_ksiazek")
 listy_2009 <- sheets_read(ss = "1Gc4gQSm9b4NDTQysiauzW9Jac6yP0oNuFbB8utO4kS4", sheet = "lista_ksiazek")
 listy_2005 <- sheets_read(ss = "1HkWkX61sQWktSXf0v0uPV8j2DwuTocesyCJuKTdisIU", sheet = "lista_ksiazek")
 listy_2006 <- sheets_read(ss = "1zeMx_Idsum8JmlM6G7Eufx9LxloHoAHv8V-My71VZf4", sheet = "lista_ksiazek")
@@ -564,6 +565,7 @@ listy_2004 <- merge(listy_2004,do2004,by = "ZA_ZAPIS_ID",all.x = TRUE) %>%
   select(pracownik,ZA_ZAPIS_ID,typ_ksiazki, link, link_1, rok, status, blad_w_imporcie_tytulu, X100, X245, X650, X655, X246, X250, X260, X300, X380, X490, X500, X501, X546, X600, X700, X041, X080)
 #zapewnienie tych samych nazw kolumn
 #aktualizacja - wprowadź wiersz dla ostatniego zaimportowanego rocznika
+colnames(listy_2010) <- names(listy_2004)
 colnames(listy_2009) <- names(listy_2004)
 colnames(listy_2005) <- names(listy_2004)
 colnames(listy_2006) <- names(listy_2004)
@@ -581,7 +583,7 @@ zapisy <- RJDBC::dbGetQuery(PBL,
   mutate(pracownik_pbl = str_extract(ZA_UWAGI, "(?<=akceptuje:)([A-Z]*)")) %>%
   select(ZA_ZAPIS_ID,pracownik_pbl,ZA_STATUS_IMP,ZA_ADNOTACJE)
 #aktualizacja - dodaj do skryptu listę z ostatnim brakującym zaimportowanym rocznikiem
-do_importu_NIE <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009) %>%
+do_importu_NIE <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009, listy_2010) %>%
   full_join(.,zapisy,by = "ZA_ZAPIS_ID") %>%
   select(X650,X655,ZA_STATUS_IMP,ZA_ADNOTACJE) %>%
   mutate(X650 = str_remove_all(X650,"\\\\7"),
@@ -639,7 +641,7 @@ bn_ok <- sqldf("select *
 
 #czy próbować wyrzucać po UKD, które dostawało tylko INO?
 #aktualizacja - dodaj do skryptu listę z ostatnim brakującym zaimportowanym rocznikiem
-do_importu_NIE2 <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009) %>%
+do_importu_NIE2 <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009, listy_2010) %>%
   full_join(.,zapisy,by = "ZA_ZAPIS_ID") %>%
   select(X080,ZA_STATUS_IMP) %>%
   mutate(X080 = str_remove_all(X080,"\\\\")) %>%
@@ -737,7 +739,7 @@ rekordy_podmiotowe_stare <- dbGetQuery(PBL,
                                         where rz.rz_rodzaj_id=1
                                         and z.za_uwagi like '%import%'")
 #aktualizacja - dodaj do skryptu listę z ostatnim brakującym zaimportowanym rocznikiem
-gatunki_poprzednie_imp <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009) %>% 
+gatunki_poprzednie_imp <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009, listy_2010) %>% 
   filter(ZA_ZAPIS_ID %in% rekordy_podmiotowe_stare$ZA_ZAPIS_ID) %>% 
   mutate(X655 = ifelse(rok==2004,str_remove_all(str_replace_all(X655,"(\\$a)","\\\\#7\\1"),"#"),as.character(X655))) %>% 
   select(X655) %>% 
@@ -751,12 +753,13 @@ gatunki_podmiotowe <- bn_ok %>%
   cSplit(.,"X655",sep = "|",direction = "long") %>%
   unique() %>%
   filter(!grepl("xhistoria|xtematyka|xbiografia",X655)) %>% 
-  filter(str_detect(X655,"\\$y[\\d-]+ w\\.")) %>% 
+  filter(str_detect(X655,"\\$y[\\d-]+ w\\."), 
+         grepl("( \\S+)(\\$y)(.*?$)", X655)) %>% 
   #mutate(X655 = str_replace(X655, "(?<= )(\\S+)(\\$y)(.*?$)", "[\\\\S]+\\2")) %>% 
   mutate(X655 = str_replace(X655, "(?<= )(\\S+)(\\$y)(.*?$)", ".+\\2")) %>% 
   unique()
 
-gatunki_podmiotowe <- str_replace_all(str_replace_all(paste(gatunki_podmiotowe$X655,collapse = "|"),"(.{2})(\\$a)","\\2"),"\\$","\\\\$")
+gatunki_podmiotowe <- str_replace_all(str_replace_all(str_replace_all(paste(gatunki_podmiotowe$X655,collapse = "|"),"(.{2})(\\$a)","\\2"),"\\$","\\\\$"), "\\(", "\\\\\\(")
 bn_ok$czy_podmiotowy <- grepl(gatunki_podmiotowe,bn_ok$X655)|grepl(gatunki_podmiotowe,bn_ok$X650)
 bn_ok <- bn_ok %>%
   mutate(rodzaj_ksiazki = ifelse(str_count(X245, " \\/ ")+1>2,"antologia",
@@ -774,7 +777,7 @@ bn_ok <- bn_ok %>%
          rodzaj_ksiazki = ifelse(grepl("Legendy|\\$vantologi",X655),"antologia",as.character(rodzaj_ksiazki)),
          rodzaj_ksiazki = ifelse(str_count(X100, "\\|")==0&X100!=""&rodzaj_ksiazki=="antologia"&grepl("Legendy i podania|Antologia",X655),"podmiotowa",as.character(rodzaj_ksiazki)),
          rodzaj_ksiazki = ifelse(X100==""&str_count(X700,"\\$t")==3&grepl("Harlequin",X260),"antologia",as.character(rodzaj_ksiazki))) %>%
-  select(1:31,rodzaj_ksiazki)
+  select(1:34,rodzaj_ksiazki)
 
 
 # przypisania do podmiotowej na podstawie smierci przed 1700
@@ -905,7 +908,7 @@ bn_ok <- bn_ok %>%
 #bezpiecznik
 #propozycja, by kierować na później wszystkie książki przedmiotowe z dziedziny "bez_ukd_PBL"
 na_pozniej <- bn_ok %>%
-  filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL=="bez_ukd_PBL")
+  filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL=="bez_ukd_PBL"&(czy_biblia!="tak"|is.na(czy_biblia)))
 #stara operacja
 # na_pozniej <- bn_ok %>%
 #   filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL=="bez_ukd_PBL") %>%
@@ -915,7 +918,7 @@ na_pozniej <- bn_ok %>%
 #          lata_temat = ifelse(grepl("\\d{2}-",X600),str_replace(X600,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA)) %>%
 # filter((is.na(lata)&is.na(lata_temat))|!(as.integer(lata)<1800)|!(as.integer(lata_temat)<1800))
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(na_pozniej, "C:/Users/Nikodem/Desktop/bn_2010_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(na_pozniej, "C:/Users/Nikodem/Desktop/bn_2011_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 bn_ok <- sqldf("select *
                from bn_ok a
@@ -1391,7 +1394,7 @@ zapisy <- RJDBC::dbGetQuery(PBL,
   select(-ZA_UWAGI)
 nazwy_lit_obcych <- str_replace_all(paste(PBL_literatury_obce$nazwa,collapse = "|"),"\\(","\\\\(")
 #aktualizacja - dodaj do skryptu listę z ostatnim brakującym zaimportowanym rocznikiem
-poprzednie_importy <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009) %>%
+poprzednie_importy <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009, listy_2010) %>%
   full_join(.,zapisy,by = "ZA_ZAPIS_ID") %>%
   select(ZA_ZAPIS_ID,X650,X655,DZ_DZIAL_ID,DZ_NAZWA,RZ_RODZAJ_ID,RZ_NAZWA,pracownik_pbl,ZA_STATUS_IMP) %>%
   mutate(X650 = str_remove_all(X650,"\\\\7"),
@@ -2410,6 +2413,8 @@ for (i in x) {
   progress(match(i,x), max.value = length(x)) 
   marc_field_655$X655 <- str_replace(marc_field_655$X655,subfield_list_char[i],"|\\1")
 }
+if (nrow(marc_field_655)>0) {
+  
 for (i in x) {
   progress(match(i,x), max.value = length(x)) 
   subfield_list_char2 <- str_replace_all(subfield_list,"\\$","\\\\$")
@@ -2452,6 +2457,18 @@ do_wspolwydania4 <- marc_field_655[!duplicated(marc_field_655$same),] %>%
          RZ_RODZAJ_ID = 1,
          RZ_NAZWA = "książka twórcy (podmiotowa)") %>%
   select(names(do_wspolwydania3))
+} else {
+  marc_field_245 <- wspolwydanie_redaktorzy %>% 
+  select(ZA_UWAGI,X245) %>% 
+  mutate(X245 = str_extract(X245, "(?<=\\/\\$c)(.*?)(?= ;|$)"),
+         X245 = str_remove(X245,"\\.$"),
+         X245 = str_remove(X245,"\\["),
+         X245 = str_remove(X245,"\\]"),
+         nazwisko = ifelse(grepl(" [a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźž\\.]* ",X245),as.character(X245),str_replace(X245,"(^.*?)( )(?!.* )(.*$)","\\3")),
+         imie = ifelse(grepl(" [a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźž\\.]* ",X245),"*",str_replace(X245,"(^.*?)( )(?!.* )(.*$)","\\1")),
+         name = paste(nazwisko,imie,sep = ", "))
+  do_wspolwydania4 <- data.frame(stringsAsFactors = FALSE)
+}
 ###przypisanie autorów podmiotowej do literatur i przypisanie do redaktorów na podstawie literatury z pola 650 i tworzenie nowych twórców na podstawie pola 245
 wspolwydanie_redaktorzy <- bn_ok %>%
   filter(rodzaj_ksiazki=="współwydanie") %>% 
@@ -3639,7 +3656,7 @@ BN_wydawnictwo <- data %>%
   mutate(za_rok_wydania = ifelse(za_rok_wydania=="NA","",as.integer(za_rok_wydania)))
 
 #połączenie wszystkich elementów w jedną tabelę
-kolejnosc <- c("ZA_UWAGI","RZ_NAZWA","ZA_RO_ROK","ZA_TYPE","RZ_RODZAJ_ID","DZ_NAZWA","DZ_DZIAL_ID","TW_TWORCA_ID","AM_AUTOR_ID","AM_NAZWISKO","AM_IMIE","ZA_TYTUL","ZA_TYTUL_ORYGINALU","ZA_JEZYK_ORYGINALU","OS_OSOBA_ID","OS_NAZWISKO","OS_IMIE","fo_symbol","za_opis_wspoltworcow","wydanie","za_tomy","instytucja","WY_WYDAWNICTWO_ID","WY_MIASTO","WY_NAZWA","za_rok_wydania","za_opis_ks","seria","TW_NAZWISKO","TW_IMIE","redaktor_dzialu","ZA_ADNOTACJE","BN_URL")
+kolejnosc <- data.frame(kolejnosc=c("ZA_UWAGI","RZ_NAZWA","ZA_RO_ROK","ZA_TYPE","RZ_RODZAJ_ID","DZ_NAZWA","DZ_DZIAL_ID","TW_TWORCA_ID","AM_AUTOR_ID","AM_NAZWISKO","AM_IMIE","ZA_TYTUL","ZA_TYTUL_ORYGINALU","ZA_JEZYK_ORYGINALU","OS_OSOBA_ID","OS_NAZWISKO","OS_IMIE","fo_symbol","za_opis_wspoltworcow","wydanie","za_tomy","instytucja","WY_WYDAWNICTWO_ID","WY_MIASTO","WY_NAZWA","za_rok_wydania","za_opis_ks","seria","TW_NAZWISKO","TW_IMIE","redaktor_dzialu","ZA_ADNOTACJE","BN_URL"))
 polaczone <- data %>%
   select(ZA_UWAGI) %>%
   left_join(.,pola_pbl,by = "ZA_UWAGI") %>%
@@ -3657,7 +3674,7 @@ polaczone <- data %>%
   left_join(.,za_tomy,by = "ZA_UWAGI") %>%
   left_join(.,za_adnotacje,by = "ZA_UWAGI") %>%
   left_join(.,BN_URL,by = "ZA_UWAGI") %>%
-  select(noquote(kolejnosc))
+  select(kolejnosc$kolejnosc)
 colnames(polaczone) <- c("rekord_BN","rz_nazwa","za_ro_rok","za_type","rz_rodzaj_id","DZ_NAZWA","DZ_DZIAL_ID","tw_tworca_id","am_autor_id","am_nazwisko","am_imie","za_tytul","za_tytul_oryginalu","za_jezyk_oryginalu","os_osoba_id","os_nazwisko","os_imie","fo_symbol","za_opis_wspoltworcow","za_wydanie","za_tomy","za_instytucja","wy_wydawnictwo_id","wy_miejsce","wy_nazwa","za_rok_wydania","za_opis_fizyczny_ksiazki","za_seria_wydawnicza","tw_nazwisko","tw_imie","pracownik","za_adnotacje","BN_URL")
 
 #zasygnalizowanie niepoprawnego kodowania
@@ -3695,7 +3712,7 @@ automatyczny_IOK <- polaczone %>%
   filter(rekord_BN %notin% data$ZA_UWAGI[data$czy_automatycznie=="nie"]) %>%
   mutate(powinno_byc = "IOK")
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(automatyczny_IOK, "C:/Users/Nikodem/Desktop/imp_2010_automatyczne_podmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(automatyczny_IOK, "C:/Users/Nikodem/Desktop/imp_2011_automatyczne_podmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 out <- cSplit(polaczone, c("am_autor_id", "am_nazwisko", "am_imie","os_osoba_id","os_nazwisko", "os_imie", "fo_symbol","wy_wydawnictwo_id","wy_miejsce","wy_nazwa"),sep = "|",direction = "long") %>%
   unique()
@@ -3804,7 +3821,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2010_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2011_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -4752,7 +4769,7 @@ BN_wydawnictwo <- data %>%
   mutate(za_rok_wydania = ifelse(za_rok_wydania=="NA","",as.integer(za_rok_wydania)))
 
 #połączenie wszystkich elementów w jedną tabelę
-kolejnosc <- c("ZA_UWAGI","RZ_NAZWA","ZA_RO_ROK","ZA_TYPE","RZ_RODZAJ_ID","DZ_NAZWA","DZ_DZIAL_ID","TW_TWORCA_ID","AM_AUTOR_ID","AM_NAZWISKO","AM_IMIE","ZA_TYTUL","ZA_TYTUL_ORYGINALU","ZA_JEZYK_ORYGINALU","OS_OSOBA_ID","OS_NAZWISKO","OS_IMIE","fo_symbol","za_opis_wspoltworcow","wydanie","za_tomy","instytucja","WY_WYDAWNICTWO_ID","WY_MIASTO","WY_NAZWA","za_rok_wydania","za_opis_ks","seria","TW_NAZWISKO","TW_IMIE","redaktor_dzialu","ZA_ADNOTACJE","BN_URL")
+kolejnosc <- data.frame(kolejnosc=c("ZA_UWAGI","RZ_NAZWA","ZA_RO_ROK","ZA_TYPE","RZ_RODZAJ_ID","DZ_NAZWA","DZ_DZIAL_ID","TW_TWORCA_ID","AM_AUTOR_ID","AM_NAZWISKO","AM_IMIE","ZA_TYTUL","ZA_TYTUL_ORYGINALU","ZA_JEZYK_ORYGINALU","OS_OSOBA_ID","OS_NAZWISKO","OS_IMIE","fo_symbol","za_opis_wspoltworcow","wydanie","za_tomy","instytucja","WY_WYDAWNICTWO_ID","WY_MIASTO","WY_NAZWA","za_rok_wydania","za_opis_ks","seria","TW_NAZWISKO","TW_IMIE","redaktor_dzialu","ZA_ADNOTACJE","BN_URL"))
 polaczone <- data %>%
   select(ZA_UWAGI) %>%
   left_join(.,pola_pbl,by = "ZA_UWAGI") %>%
@@ -4770,7 +4787,7 @@ polaczone <- data %>%
   left_join(.,za_tomy,by = "ZA_UWAGI") %>%
   left_join(.,za_adnotacje,by = "ZA_UWAGI") %>%
   left_join(.,BN_URL,by = "ZA_UWAGI") %>%
-  select(noquote(kolejnosc))
+  select(kolejnosc$kolejnosc)
 colnames(polaczone) <- c("rekord_BN","rz_nazwa","za_ro_rok","za_type","rz_rodzaj_id","DZ_NAZWA","DZ_DZIAL_ID","tw_tworca_id","am_autor_id","am_nazwisko","am_imie","za_tytul","za_tytul_oryginalu","za_jezyk_oryginalu","os_osoba_id","os_nazwisko","os_imie","fo_symbol","za_opis_wspoltworcow","za_wydanie","za_tomy","za_instytucja","wy_wydawnictwo_id","wy_miejsce","wy_nazwa","za_rok_wydania","za_opis_fizyczny_ksiazki","za_seria_wydawnicza","tw_nazwisko","tw_imie","pracownik","za_adnotacje","BN_URL")
 
 #zasygnalizowanie niepoprawnego kodowania
@@ -4904,7 +4921,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2010_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2011_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -5825,7 +5842,7 @@ BN_wydawnictwo <- data %>%
   mutate(za_rok_wydania = ifelse(za_rok_wydania=="NA","",as.integer(za_rok_wydania)))
 
 #połączenie wszystkich elementów w jedną tabelę
-kolejnosc <- c("ZA_UWAGI","RZ_NAZWA","ZA_RO_ROK","ZA_TYPE","RZ_RODZAJ_ID","DZ_NAZWA","DZ_DZIAL_ID","TW_TWORCA_ID","AM_AUTOR_ID","AM_NAZWISKO","AM_IMIE","ZA_TYTUL","ZA_TYTUL_ORYGINALU","ZA_JEZYK_ORYGINALU","OS_OSOBA_ID","OS_NAZWISKO","OS_IMIE","fo_symbol","za_opis_wspoltworcow","wydanie","za_tomy","instytucja","WY_WYDAWNICTWO_ID","WY_MIASTO","WY_NAZWA","za_rok_wydania","za_opis_ks","seria","TW_NAZWISKO","TW_IMIE","redaktor_dzialu","ZA_ADNOTACJE","BN_URL")
+kolejnosc <- data.frame(kolejnosc=c("ZA_UWAGI","RZ_NAZWA","ZA_RO_ROK","ZA_TYPE","RZ_RODZAJ_ID","DZ_NAZWA","DZ_DZIAL_ID","TW_TWORCA_ID","AM_AUTOR_ID","AM_NAZWISKO","AM_IMIE","ZA_TYTUL","ZA_TYTUL_ORYGINALU","ZA_JEZYK_ORYGINALU","OS_OSOBA_ID","OS_NAZWISKO","OS_IMIE","fo_symbol","za_opis_wspoltworcow","wydanie","za_tomy","instytucja","WY_WYDAWNICTWO_ID","WY_MIASTO","WY_NAZWA","za_rok_wydania","za_opis_ks","seria","TW_NAZWISKO","TW_IMIE","redaktor_dzialu","ZA_ADNOTACJE","BN_URL"))
 polaczone <- data %>%
   select(ZA_UWAGI) %>%
   left_join(.,pola_pbl,by = "ZA_UWAGI") %>%
@@ -5843,7 +5860,7 @@ polaczone <- data %>%
   left_join(.,za_tomy,by = "ZA_UWAGI") %>%
   left_join(.,za_adnotacje,by = "ZA_UWAGI") %>%
   left_join(.,BN_URL,by = "ZA_UWAGI") %>%
-  select(noquote(kolejnosc))
+  select(kolejnosc$kolejnosc)
 colnames(polaczone) <- c("rekord_BN","rz_nazwa","za_ro_rok","za_type","rz_rodzaj_id","DZ_NAZWA","DZ_DZIAL_ID","tw_tworca_id","am_autor_id","am_nazwisko","am_imie","za_tytul","za_tytul_oryginalu","za_jezyk_oryginalu","os_osoba_id","os_nazwisko","os_imie","fo_symbol","za_opis_wspoltworcow","za_wydanie","za_tomy","za_instytucja","wy_wydawnictwo_id","wy_miejsce","wy_nazwa","za_rok_wydania","za_opis_fizyczny_ksiazki","za_seria_wydawnicza","tw_nazwisko","tw_imie","pracownik","za_adnotacje","BN_URL")
 
 #zasygnalizowanie niepoprawnego kodowania
@@ -5977,7 +5994,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2010_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2011_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -6785,7 +6802,7 @@ BN_wydawnictwo <- data %>%
   mutate(za_rok_wydania = ifelse(za_rok_wydania=="NA","",as.integer(za_rok_wydania)))
 
 #połączenie wszystkich elementów w jedną tabelę
-kolejnosc <- c("ZA_UWAGI","RZ_NAZWA","ZA_RO_ROK","ZA_TYPE","RZ_RODZAJ_ID","DZ_NAZWA","DZ_DZIAL_ID","TW_TWORCA_ID","AM_AUTOR_ID","AM_NAZWISKO","AM_IMIE","ZA_TYTUL","ZA_TYTUL_ORYGINALU","ZA_JEZYK_ORYGINALU","OS_OSOBA_ID","OS_NAZWISKO","OS_IMIE","fo_symbol","za_opis_wspoltworcow","wydanie","za_tomy","instytucja","WY_WYDAWNICTWO_ID","WY_MIASTO","WY_NAZWA","za_rok_wydania","za_opis_ks","seria","TW_NAZWISKO","TW_IMIE","redaktor_dzialu","ZA_ADNOTACJE","BN_URL")
+kolejnosc <- data.frame(kolejnosc=c("ZA_UWAGI","RZ_NAZWA","ZA_RO_ROK","ZA_TYPE","RZ_RODZAJ_ID","DZ_NAZWA","DZ_DZIAL_ID","TW_TWORCA_ID","AM_AUTOR_ID","AM_NAZWISKO","AM_IMIE","ZA_TYTUL","ZA_TYTUL_ORYGINALU","ZA_JEZYK_ORYGINALU","OS_OSOBA_ID","OS_NAZWISKO","OS_IMIE","fo_symbol","za_opis_wspoltworcow","wydanie","za_tomy","instytucja","WY_WYDAWNICTWO_ID","WY_MIASTO","WY_NAZWA","za_rok_wydania","za_opis_ks","seria","TW_NAZWISKO","TW_IMIE","redaktor_dzialu","ZA_ADNOTACJE","BN_URL"))
 polaczone <- data %>%
   select(ZA_UWAGI) %>%
   left_join(.,pola_pbl,by = "ZA_UWAGI") %>%
@@ -6803,7 +6820,7 @@ polaczone <- data %>%
   left_join(.,za_tomy,by = "ZA_UWAGI") %>%
   left_join(.,za_adnotacje,by = "ZA_UWAGI") %>%
   left_join(.,BN_URL,by = "ZA_UWAGI") %>%
-  select(noquote(kolejnosc))
+  select(kolejnosc$kolejnosc)
 colnames(polaczone) <- c("rekord_BN","rz_nazwa","za_ro_rok","za_type","rz_rodzaj_id","DZ_NAZWA","DZ_DZIAL_ID","tw_tworca_id","am_autor_id","am_nazwisko","am_imie","za_tytul","za_tytul_oryginalu","za_jezyk_oryginalu","os_osoba_id","os_nazwisko","os_imie","fo_symbol","za_opis_wspoltworcow","za_wydanie","za_tomy","za_instytucja","wy_wydawnictwo_id","wy_miejsce","wy_nazwa","za_rok_wydania","za_opis_fizyczny_ksiazki","za_seria_wydawnicza","tw_nazwisko","tw_imie","pracownik","za_adnotacje","BN_URL")
 
 #zasygnalizowanie niepoprawnego kodowania
@@ -6937,7 +6954,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2010_wspolwydanie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2011_wspolwydanie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -6949,7 +6966,7 @@ Najpierw należy przeprowadzić import do bazy, a następnie egzekwować poniżs
 #automatyczny IOK dla rekordów bibliograficznych
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
 
-nadpisanie_zapisow_IOK <- read.csv2("C:/Users/Nikodem/Desktop/imp_2010_automatyczne_podmiotowe.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE)
+nadpisanie_zapisow_IOK <- read.csv2("C:/Users/Nikodem/Desktop/imp_2011_automatyczne_podmiotowe.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE)
 
 #aktualizacja - wpisać w selekcie dla za_uwagi właściwą frazę dla rocznika, np. 'BN: 2009%'
 nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
@@ -6957,13 +6974,13 @@ nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
   left_join(.,dbGetQuery(PBL,
                              "select z.za_zapis_id, z.za_status_imp, z.za_uwagi
                               from pbl_zapisy z
-                              where za_uwagi like 'BN: 2010%'
+                              where za_uwagi like 'BN: 2011%'
                               and z.za_url_bn is not null") %>% mutate(ZA_UWAGI = str_extract(ZA_UWAGI,"(?<=BN: )(.*?)(?=, import)")),by=c("rekord_BN"="ZA_UWAGI")) %>% 
   rename(jest = ZA_STATUS_IMP) %>% 
   mutate(ID2 = NA) %>% 
   select(ZA_ZAPIS_ID,ID2,jest,powinno_byc)
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Nikodem/Desktop/2010_nadpisanie_zapisow_IOK.xlsx",sheetName = "ZA_STATUS_IMP")
+write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Nikodem/Desktop/2011_nadpisanie_zapisow_IOK.xlsx",sheetName = "ZA_STATUS_IMP")
 
 #bezpiecznik
 #automatyczny IOK dla nowych twórców w kartotece powinien zostać przeprowadzony z poziomu importera
@@ -6984,7 +7001,7 @@ kolejnosc <- c("pracownik","ZA_ZAPIS_ID","typ_ksiazki","link","link_1","rok","st
 rocznik_pbl_po_imporcie <- dbGetQuery(PBL,
                                        "select z.za_zapis_id, z.za_status_imp, z.za_uwagi
                                         from pbl_zapisy z
-                                        where za_uwagi like 'BN: 2010%'
+                                        where za_uwagi like 'BN: 2011%'
                                         and z.za_url_bn is not null") %>% 
   mutate(ZA_UWAGI = str_extract(ZA_UWAGI,"(?<=BN: )(.*?)(?=, import)")) %>%
   rename(status = ZA_STATUS_IMP) %>% 
@@ -6992,7 +7009,7 @@ rocznik_pbl_po_imporcie <- dbGetQuery(PBL,
   select(noquote(kolejnosc))
 rocznik_pbl_po_imporcie$pracownik[rocznik_pbl_po_imporcie$status=="IOK"] <- "AUTOMAT"
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Nikodem/Desktop/ks_BN_2010_listy_pracowników.xlsx",sheetName = "lista_ksiazek")
+write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Nikodem/Desktop/ks_BN_2011_listy_pracowników.xlsx",sheetName = "lista_ksiazek")
 #utwórz nowy podfolder w folderze importu BN i prześlij listę na dysk, przygotuj widoki filtrów dla wszystkich osób i roześlij unikatowe linki
 ```
 
