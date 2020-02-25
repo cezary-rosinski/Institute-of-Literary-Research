@@ -7114,3 +7114,22 @@ pbl_bn_viaf_import <- pbl_bn_viaf_import %>%
 write.xlsx(pbl_bn_viaf_import, "C:/Users/Nikodem/Desktop/relacje_osobowe_pbl_bn.xlsx",sheetName = "pbl-bn")
 #następnie przeanalizować zawartość wkejonej części i zostawić "tak" w kolumnie F tylko dla poprawnych utożsamień (osoba w PBL to osoba w BN)
 ```
+
+```{r problemy}
+# Ewa - jeśli w uwagach jest w 500 tyt oryginału, a później info o pseudonimie, to info nie jest importowane - naprawić dla podmiotowych
+# 
+# Paulina
+# - dziwne trzyosobowe spółki autorskie (chociaż mniej niż poprzednio)
+# - nagminne przypisywanie do mnie antologii, w oparciu o nazwisko na B (chociaż jest "et al.", a BN hasłuje jako antologię)
+# - zawsze się w oparciu o "J" przypisze do mnie jakiś Jan Paweł II oraz Jerzy Popiełuszko (tym razem nie pod "Uszko Jerzy", tylko nowy autor na J)
+# Z błędów nowych:
+# - z importu uzupełniającego 2009 oraz z importu 2010 pojawiło się u mnie sporo książek dot. prawa, głównie komentarzy do jakichś kodeksów (pewnie ze wzgl. na hasło interpretacja - co z tego, że przepisów)
+# 
+# Pomysły 
+# - wyprostować 100 i 245 - czy się da?
+# - czy z informacji o pseudonimie i nazwisku właściwym w uwagach coś można wyciągnąć
+# - sprawdzić statystycznie, które informacje są drukowane najczęściej w uwagach
+  
+
+```
+
