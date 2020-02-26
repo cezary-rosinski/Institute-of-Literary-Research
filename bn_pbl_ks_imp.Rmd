@@ -7013,6 +7013,12 @@ bezpiecznik
 UWAGA!
 Najpierw należy przeprowadzić import do bazy, a następnie egzekwować poniższą część kodu
 
+```{r ręczna korekrta importu}
+#w formularzu książkowym wyszukaj w polu uwag frazę '%akceptuje:NA%' i - jeśli takowa wystąpi - zastąp NA imieniem właściwego pracownika
+#wiem, że to skasowaliśmy, ale doszedłem do wniosku, że jednak warto to sprawdzić
+```
+
+
 ```{r przygotowanie plików do masowego nadpisania statusu IOK}
 #automatyczny IOK dla rekordów bibliograficznych
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
