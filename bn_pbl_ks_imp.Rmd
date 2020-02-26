@@ -1229,7 +1229,7 @@ chunk10 <- bn_ok
 
 
 ```{r przypisanie redaktorów do przedmiotowej, podmiotowej i antologii}
-chunk10 <- bn_ok
+bn_ok <- chunk10
 przedmiotowa_redaktorzy <- bn_ok %>%
   filter(rodzaj_ksiazki=="przedmiotowa")
 ###przypisanie redaktora na podstawie osoby z 600 jako tematu - książki o twórcy
@@ -1825,7 +1825,7 @@ marc_field_100 <- marc_field_100 %>%
 do_podmiotowej2 <- marc_field_100 %>%
   unique() %>%
   inner_join(.,pbl_viaf,by = c("name" = "BN_name")) %>%
-  left_join(.,PBL_tworcy,by = c("pbl_id"="TW_TWORCA_ID")) %>%
+  inner_join(.,PBL_tworcy,by = c("pbl_id"="TW_TWORCA_ID")) %>%
   left_join(.,redaktorzy_dzialow,by = c("TW_DZ_DZIAL_ID"="DZ_DZIAL_ID")) %>%
   select(ZA_UWAGI,TW_TWORCA_ID=pbl_id,TW_NAZWISKO,TW_IMIE,DZ_DZIAL_ID=TW_DZ_DZIAL_ID,DZ_NAZWA=DZ_NAZWA.x,redaktor_dzialu) %>%
   mutate(RZ_RODZAJ_ID = 1,
@@ -2689,6 +2689,9 @@ count2 <- as.data.frame(table(bn_ok$czy_automatycznie))
 #          pracownik = str_replace(pracownik,"(^.*?)(\\_.*$)","\\1"))
 # 
 # count3 <- as.data.frame(table(test$pracownik))
+
+blabla <- test %>% 
+  filter(pracownik=="NA")
 ```
 
 ```{r książki podmiotowe}
@@ -7009,14 +7012,6 @@ for (i in x) {
 bezpiecznik
 UWAGA!
 Najpierw należy przeprowadzić import do bazy, a następnie egzekwować poniższą część kodu
-
-```{r błędy do ręcznego poprawienia}
-#kilka rekordów, zazwyczaj dwa dostaje redaktora NA
-#najlepiej znaleźć te rekordy bezpośrednio przy użyciu formularza i przypisać redaktorów ręcznie
-#wyszukaj w uwagach %akceptuje:NA% i wpisz nick redaktora
-
-```
-
 
 ```{r przygotowanie plików do masowego nadpisania statusu IOK}
 #automatyczny IOK dla rekordów bibliograficznych
