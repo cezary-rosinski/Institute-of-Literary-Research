@@ -350,6 +350,14 @@ bn_ks <- bn_ks %>%
 bn_ok <- bn_ks %>%
   filter(!((is.na(osoba_bn_autor)&is.na(osoba_bn_temat))&dziedzina_PBL=="bez_ukd_PBL"&is.na(bez_ukd_ale_PBL)&is.na(czy_wspomnienia_reportaz)&is.na(slowa_literackie)&is.na(czy_biblia)))
 
+#interpretacje nieliterackie
+zle_interpretacje <- bn_ok %>% 
+  filter(grepl("interpretacj",X245,ignore.case = TRUE)|grepl("interpretacj",X650,ignore.case = TRUE)|grepl("interpretacj",X245,ignore.case = TRUE)) %>% 
+  filter(grepl("\\$a336|\\$a342|\\$a32|\\$a551|\\$a616|\\$a159\\.961",X080)|grepl("prawn|handl|handel|kodeks|prac|ustaw|administrac|spółka|spółek|prawa|podatk",X655,ignore.case = TRUE)|grepl("prawn|handl|handel|kodeks|prac|ustaw|administrac|spółka|spółek|prawa|podatk",X650,ignore.case = TRUE)|grepl("prawn|handl|handel|kodeks|ustaw|administrac|spółka|spółek|prawa|podatk",X245,ignore.case = TRUE))
+
+bn_ok <- bn_ok %>% 
+  filter(id %notin% zle_interpretacje$id)
+
 #usuwanie zdublowanych książek
 #020
 marc_field_020 <- bn_ok %>%
@@ -827,7 +835,8 @@ marc_field_100 <- marc_field_100 %>%
 bn_ok <- bn_ok %>% 
   mutate(rodzaj_ksiazki = ifelse(id %in% marc_field_100$id, "podmiotowa", as.character(rodzaj_ksiazki)),
          rodzaj_ksiazki = ifelse(id %in% stare_rodzajowanie$id, "przedmiotowa",as.character(rodzaj_ksiazki)),
-         rodzaj_ksiazki = ifelse(X080=="\\\\$a82-1/-9(0.054)"&rodzaj_ksiazki=="przedmiotowa"&!grepl("xhistoria|xtematyka|xbiografia",X650)&!grepl("xhistoria|xtematyka|xbiografia",X655),"podmiotowa",as.character(rodzaj_ksiazki)))
+         rodzaj_ksiazki = ifelse(X080=="\\\\$a82-1/-9(0.054)"&rodzaj_ksiazki=="przedmiotowa"&!grepl("xhistoria|xtematyka|xbiografia",X650)&!grepl("xhistoria|xtematyka|xbiografia",X655),"podmiotowa",as.character(rodzaj_ksiazki)),
+         rodzaj_ksiazki = ifelse(rodzaj_ksiazki=="podmiotowa"&grepl("aut\\.",X245)&grepl("et al\\.",X245),"antologia",as.character(rodzaj_ksiazki)))
 chunk5 <- bn_ok
 ```
 
@@ -916,10 +925,16 @@ chunk6 <- bn_ok
 
 ```{r wyznaczenie zbioru do uzupełnienia w przyszłości}
 bn_ok <- chunk6
+
+
+count <- as.data.frame(table(chunk6$dziedzina_PBL,chunk6$rodzaj_ksiazki,chunk6$czy_automatycznie))
+
 #bezpiecznik
 #propozycja, by kierować na później wszystkie książki przedmiotowe z dziedziny "bez_ukd_PBL"
+# na_pozniej <- bn_ok %>%
+#   filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL=="bez_ukd_PBL"&(czy_biblia!="tak"|is.na(czy_biblia)))
 na_pozniej <- bn_ok %>%
-  filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL=="bez_ukd_PBL"&(czy_biblia!="tak"|is.na(czy_biblia)))
+  filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL %in% c("bez_ukd_PBL","ukd_pogranicze")&(czy_biblia!="tak"|is.na(czy_biblia)))
 #stara operacja
 # na_pozniej <- bn_ok %>%
 #   filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL=="bez_ukd_PBL") %>%
@@ -1138,6 +1153,7 @@ bn_ok <- chunk7
 # podzielenie unikatowych rekordów bn na dwa wiersze w tabeli, z których powstaną dwa rekordy pbl
 bn_ok <- bn_ok %>%
   mutate(ZA_UWAGI = 1:nrow(.))
+
 wspolwydania_fix <- bn_ok %>%
   filter(rodzaj_ksiazki=="współwydanie") %>%
   mutate(X245 = ifelse(grepl("\\]\\.[^$]",X245),str_replace(X245,"(\\$c)(.*)(\\]\\. )(.* \\/ .*)","\\1\\2]|10$a\\4"),str_replace(X245,"(\\$c)(.*?)(?<!tł|red)(\\. )(.* \\/ .*)","\\1\\2|10$a\\4")),
@@ -1177,7 +1193,7 @@ for (i in x) {
   string <- paste(string_a,string_b,string_c,sep = "")
   marc_field_246[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_246$X246),str_replace_all(gsub(string,"\\3",marc_field_246$X246),"\\${2}.", "~"),NA)
 }
-
+marc_field_246 <- marc_field_246[, colSums(is.na(marc_field_246)) != nrow(marc_field_246)]
 marc_field_246 <- marc_field_246 %>% 
   filter(is.na(`$i`)|`$i`!="Tyt. przekł.:") %>% 
   select(ZA_UWAGI,X246) %>% 
@@ -2657,7 +2673,7 @@ chunk11 <- bn_ok
 ```{r statystyki pracowników}
 #bezpiecznik - sprawdź, czy rozkład jest niekontrowersyjny
 #bez automatu
-
+bn_ok <- chunk11
 count <- as.data.frame(table(bn_ok$redaktor_dzialu,bn_ok$czy_automatycznie)) %>% 
   filter(Var2=="nie") %>% 
   arrange(-Freq)
@@ -2665,6 +2681,14 @@ count <- as.data.frame(table(bn_ok$redaktor_dzialu,bn_ok$czy_automatycznie)) %>%
 #ile książek ma automat
 
 count2 <- as.data.frame(table(bn_ok$czy_automatycznie))
+
+#realne statystyki po podmiotowej
+# test <- bn_ok %>% 
+#   left_join(out %>% select(rekord_BN,pracownik),by=c("ZA_UWAGI"="rekord_BN")) %>% 
+#   mutate(pracownik = ifelse(is.na(pracownik),as.character(redaktor_dzialu),as.character(pracownik)),
+#          pracownik = str_replace(pracownik,"(^.*?)(\\_.*$)","\\1"))
+# 
+# count3 <- as.data.frame(table(test$pracownik))
 ```
 
 ```{r książki podmiotowe}
@@ -3692,7 +3716,7 @@ polaczone <- data %>%
   left_join(.,za_tomy,by = "ZA_UWAGI") %>%
   left_join(.,za_adnotacje,by = "ZA_UWAGI") %>%
   left_join(.,BN_URL,by = "ZA_UWAGI") %>%
-  select(kolejnosc$kolejnosc)
+  select(as.vector(kolejnosc$kolejnosc))
 colnames(polaczone) <- c("rekord_BN","rz_nazwa","za_ro_rok","za_type","rz_rodzaj_id","DZ_NAZWA","DZ_DZIAL_ID","tw_tworca_id","am_autor_id","am_nazwisko","am_imie","za_tytul","za_tytul_oryginalu","za_jezyk_oryginalu","os_osoba_id","os_nazwisko","os_imie","fo_symbol","za_opis_wspoltworcow","za_wydanie","za_tomy","za_instytucja","wy_wydawnictwo_id","wy_miejsce","wy_nazwa","za_rok_wydania","za_opis_fizyczny_ksiazki","za_seria_wydawnicza","tw_nazwisko","tw_imie","pracownik","za_adnotacje","BN_URL")
 
 #zasygnalizowanie niepoprawnego kodowania
@@ -4807,7 +4831,7 @@ polaczone <- data %>%
   left_join(.,za_tomy,by = "ZA_UWAGI") %>%
   left_join(.,za_adnotacje,by = "ZA_UWAGI") %>%
   left_join(.,BN_URL,by = "ZA_UWAGI") %>%
-  select(kolejnosc$kolejnosc)
+  select(as.vector(kolejnosc$kolejnosc))
 colnames(polaczone) <- c("rekord_BN","rz_nazwa","za_ro_rok","za_type","rz_rodzaj_id","DZ_NAZWA","DZ_DZIAL_ID","tw_tworca_id","am_autor_id","am_nazwisko","am_imie","za_tytul","za_tytul_oryginalu","za_jezyk_oryginalu","os_osoba_id","os_nazwisko","os_imie","fo_symbol","za_opis_wspoltworcow","za_wydanie","za_tomy","za_instytucja","wy_wydawnictwo_id","wy_miejsce","wy_nazwa","za_rok_wydania","za_opis_fizyczny_ksiazki","za_seria_wydawnicza","tw_nazwisko","tw_imie","pracownik","za_adnotacje","BN_URL")
 
 #zasygnalizowanie niepoprawnego kodowania
@@ -5882,7 +5906,7 @@ polaczone <- data %>%
   left_join(.,za_tomy,by = "ZA_UWAGI") %>%
   left_join(.,za_adnotacje,by = "ZA_UWAGI") %>%
   left_join(.,BN_URL,by = "ZA_UWAGI") %>%
-  select(kolejnosc$kolejnosc)
+  select(as.vector(kolejnosc$kolejnosc))
 colnames(polaczone) <- c("rekord_BN","rz_nazwa","za_ro_rok","za_type","rz_rodzaj_id","DZ_NAZWA","DZ_DZIAL_ID","tw_tworca_id","am_autor_id","am_nazwisko","am_imie","za_tytul","za_tytul_oryginalu","za_jezyk_oryginalu","os_osoba_id","os_nazwisko","os_imie","fo_symbol","za_opis_wspoltworcow","za_wydanie","za_tomy","za_instytucja","wy_wydawnictwo_id","wy_miejsce","wy_nazwa","za_rok_wydania","za_opis_fizyczny_ksiazki","za_seria_wydawnicza","tw_nazwisko","tw_imie","pracownik","za_adnotacje","BN_URL")
 
 #zasygnalizowanie niepoprawnego kodowania
@@ -6844,7 +6868,7 @@ polaczone <- data %>%
   left_join(.,za_tomy,by = "ZA_UWAGI") %>%
   left_join(.,za_adnotacje,by = "ZA_UWAGI") %>%
   left_join(.,BN_URL,by = "ZA_UWAGI") %>%
-  select(kolejnosc$kolejnosc)
+  select(as.vector(kolejnosc$kolejnosc))
 colnames(polaczone) <- c("rekord_BN","rz_nazwa","za_ro_rok","za_type","rz_rodzaj_id","DZ_NAZWA","DZ_DZIAL_ID","tw_tworca_id","am_autor_id","am_nazwisko","am_imie","za_tytul","za_tytul_oryginalu","za_jezyk_oryginalu","os_osoba_id","os_nazwisko","os_imie","fo_symbol","za_opis_wspoltworcow","za_wydanie","za_tomy","za_instytucja","wy_wydawnictwo_id","wy_miejsce","wy_nazwa","za_rok_wydania","za_opis_fizyczny_ksiazki","za_seria_wydawnicza","tw_nazwisko","tw_imie","pracownik","za_adnotacje","BN_URL")
 
 #zasygnalizowanie niepoprawnego kodowania
@@ -6985,6 +7009,14 @@ for (i in x) {
 bezpiecznik
 UWAGA!
 Najpierw należy przeprowadzić import do bazy, a następnie egzekwować poniższą część kodu
+
+```{r błędy do ręcznego poprawienia}
+#kilka rekordów, zazwyczaj dwa dostaje redaktora NA
+#najlepiej znaleźć te rekordy bezpośrednio przy użyciu formularza i przypisać redaktorów ręcznie
+#wyszukaj w uwagach %akceptuje:NA% i wpisz nick redaktora
+
+```
+
 
 ```{r przygotowanie plików do masowego nadpisania statusu IOK}
 #automatyczny IOK dla rekordów bibliograficznych
@@ -7137,23 +7169,5 @@ pbl_bn_viaf_import <- pbl_bn_viaf_import %>%
 #zapisać plik i jego treść wkleić na dysk do tabeli "mapowanie_osob_bn_pbl_po_imporcie"
 write.xlsx(pbl_bn_viaf_import, "C:/Users/Cezary/Desktop/relacje_osobowe_pbl_bn.xlsx",sheetName = "pbl-bn")
 #następnie przeanalizować zawartość wkejonej części i zostawić "tak" w kolumnie F tylko dla poprawnych utożsamień (osoba w PBL to osoba w BN)
-```
-
-```{r problemy}
-# Ewa - jeśli w uwagach jest w 500 tyt oryginału, a później info o pseudonimie, to info nie jest importowane - naprawić dla podmiotowych
-# 
-# Paulina
-# - dziwne trzyosobowe spółki autorskie (chociaż mniej niż poprzednio)
-# - nagminne przypisywanie do mnie antologii, w oparciu o nazwisko na B (chociaż jest "et al.", a BN hasłuje jako antologię)
-# - zawsze się w oparciu o "J" przypisze do mnie jakiś Jan Paweł II oraz Jerzy Popiełuszko (tym razem nie pod "Uszko Jerzy", tylko nowy autor na J)
-# Z błędów nowych:
-# - z importu uzupełniającego 2009 oraz z importu 2010 pojawiło się u mnie sporo książek dot. prawa, głównie komentarzy do jakichś kodeksów (pewnie ze wzgl. na hasło interpretacja - co z tego, że przepisów)
-# 
-# Pomysły 
-# - wyprostować 100 i 245 - czy się da?
-# - czy z informacji o pseudonimie i nazwisku właściwym w uwagach coś można wyciągnąć
-# - sprawdzić statystycznie, które informacje są drukowane najczęściej w uwagach
-  
-
 ```
 
