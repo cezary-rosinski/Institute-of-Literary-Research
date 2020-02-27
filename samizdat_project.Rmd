@@ -4,7 +4,9 @@ output: html_notebook
 ---
 
 ```{r loading data}
-pacman::p_load(stringr,tidyverse,RJDBC,sqldf,dplyr,splitstackshape,svMisc,data.table)
+options(java.parameters = "-Xmx32000m")
+options(scipen = 999)
+pacman::p_load(stringr,tidyverse,RJDBC,sqldf,dplyr,splitstackshape,svMisc,data.table,googlesheets4)
 
 #downloading files
 bn_books <- read.csv2("C:/Users/Cezary/Downloads/pw_ksiazki.csv", encoding = "Windows-1250", header = TRUE, stringsAsFactors = FALSE) 
@@ -1009,7 +1011,7 @@ pbl_record_people_books_authors <- pbl_books %>%
 
 pbl_record_people_books_authors <- pbl_record_people_books_authors %>%
   mutate(data_set = "pbl_books") %>%
-  mutate(field = "tworcy") %>%
+  mutate(field = "autorzy") %>%
   mutate(name = paste(autor_nazwisko,autor_imie,sep = "|")) %>%
   mutate(name_form = paste(autor_nazwisko,autor_imie,sep = ", ")) %>%
   mutate(subfield = NA) %>%
@@ -1024,7 +1026,7 @@ pbl_record_people_books_coworkers <- pbl_books %>%
 
 pbl_record_people_books_coworkers <- pbl_record_people_books_coworkers %>%
   mutate(data_set = "pbl_books") %>%
-  mutate(field = "tworcy") %>%
+  mutate(field = "wspoltworcy") %>%
   mutate(name = paste(wspoltworca_nazwisko,wspoltworca_imie,sep = "|")) %>%
   mutate(name_form = paste(wspoltworca_nazwisko,wspoltworca_imie,sep = ", ")) %>%
   mutate(subfield = NA) %>%
@@ -1059,7 +1061,7 @@ pbl_record_people_art_authors <- pbl_articles %>%
 
 pbl_record_people_art_authors <- pbl_record_people_art_authors %>%
   mutate(data_set = "pbl_articles") %>%
-  mutate(field = "tworcy") %>%
+  mutate(field = "autorzy") %>%
   mutate(name = paste(autor_nazwisko,autor_imie,sep = "|")) %>%
   mutate(name_form = paste(autor_nazwisko,autor_imie,sep = ", ")) %>%
   mutate(subfield = NA) %>%
@@ -1074,7 +1076,7 @@ pbl_record_people_art_coworkers <- pbl_articles %>%
 
 pbl_record_people_art_coworkers <- pbl_record_people_art_coworkers %>%
   mutate(data_set = "pbl_articles") %>%
-  mutate(field = "tworcy") %>%
+  mutate(field = "wspoltworcy") %>%
   mutate(name = paste(wspoltworca_nazwisko,wspoltworca_imie,sep = "|")) %>%
   mutate(name_form = paste(wspoltworca_nazwisko,wspoltworca_imie,sep = ", ")) %>%
   mutate(subfield = NA) %>%
@@ -2069,6 +2071,44 @@ series <- rbind(bn_series,cz_series,pbl_series) %>%
   arrange(Series_Title,Addition_to_Title)
 
 write.csv2(series, "C:/Users/Cezary/Desktop/samizdat_kartoteka_serii.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+
+```
+
+```{r kartoteki po pracach dziewczyn}
+
+kartoteka_osob <- sheets_read(ss = "1Y8Y_pfkuKiv5npL6QJAXWbDO6twIJqsK3ArvaokjFkU", sheet = "samizdat") %>% 
+  select(-test) %>% 
+  cSplit(c("name_form","name_form_id","id_osoby"),sep = "|",direction = "long") %>% 
+  filter(!is.na(name_form)) %>% 
+  mutate(name_form = str_remove(name_form,", NA")) %>% 
+  cSplit("name_form_id",sep = "-",direction = "wide")
+
+kartoteka_osob <- kartoteka_osob %>% 
+  
+
+kartoteka_osob <- kartoteka_osob %>% 
+  mutate(Project_ID = ifelse(name_form_id_1=="bn_books",1,
+                             ifelse(name_form_id_1=="cz_books",2,
+                                    ifelse(name_form_id_1=="cz_articles",3,
+                                           ifelse(name_form_id_1=="pbl_books",4,5)))),
+         LOD_ID = NA,
+         Index_Name = ifelse(name_form_id_1=="bn_books"&(name_form_id_4=="X100"|name_form_id_4=="X700"|name_form_id_4=="X701")&name_form_id_5=="%1",as.character(name_form),
+                             ifelse((name_form_id_1=="cz_books"|name_form_id_1=="cz_articles")&(name_form_id_4=="X100"|name_form_id_4=="X600"|name_form_id_4=="X700")&name_form_id_5=="$$a",as.character(name_form),
+                                    ifelse((name_form_id_1=="pbl_books"|name_form_id_1=="pbl_articles")&name_form_id_2=="tworcy",as.character(name_form),NA))))
+
+
+
+
+test <- kartoteka_osob %>% 
+  select(name_form_id_1) %>% 
+  unique()
+
+kartoteka_instytucji <- sheets_read(ss = "1MX8oqQly65GzkEhwKGf7NqBc4L4B5mNj12NtgLgB5Bs", sheet = "Arkusz1")
+
+kartoteka_serii <- sheets_read(ss = "1UPBWh8743mJWVGFD1fg3CHx03eOH8lSWcX090QIFJgs", sheet = "Arkusz1")
+
+kartoteka_wydarzen <- sheets_read(ss = "1BosLyDVa7uxNTxw3Lt19PPADx8ZZcEuLYDnl--6vVDM", sheet = "Arkusz1")
+
 
 ```
 
