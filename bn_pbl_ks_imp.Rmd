@@ -926,15 +926,23 @@ chunk6 <- bn_ok
 ```{r wyznaczenie zbioru do uzupełnienia w przyszłości}
 bn_ok <- chunk6
 
-
-count <- as.data.frame(table(chunk6$dziedzina_PBL,chunk6$rodzaj_ksiazki,chunk6$czy_automatycznie))
+#propozycja1
+#na później kierowane są wszystkie książki przedmiotowe, które mają bez_ukd_PBL lub ukd_pogranicze i nie są biblią oraz książki wydane poza Polską, które nie poszły do automatycznego importu oraz harlequiny, które nie poszły do automatycznego importu
+na_pozniej <- bn_ok %>%
+  filter((if (X501=="") !grepl("pl",substr(X008,16,18))&!grepl("pol",substr(X008,36,38))&czy_automatycznie=="nie")|czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL %in% c("bez_ukd_PBL","ukd_pogranicze")&(czy_biblia!="tak"|is.na(czy_biblia))|grepl("arleq",X260,ignore.case = TRUE)&czy_automatycznie=="nie")
 
 #bezpiecznik
+
+#propozycja2
 #propozycja, by kierować na później wszystkie książki przedmiotowe z dziedziny "bez_ukd_PBL"
 # na_pozniej <- bn_ok %>%
 #   filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL=="bez_ukd_PBL"&(czy_biblia!="tak"|is.na(czy_biblia)))
-na_pozniej <- bn_ok %>%
-  filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL %in% c("bez_ukd_PBL","ukd_pogranicze")&(czy_biblia!="tak"|is.na(czy_biblia)))
+
+# #propozycja3
+# na_pozniej <- bn_ok %>%
+#   filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL %in% c("bez_ukd_PBL","ukd_pogranicze")&(czy_biblia!="tak"|is.na(czy_biblia)))
+
+#propozycja4
 #stara operacja
 # na_pozniej <- bn_ok %>%
 #   filter(czy_automatycznie=="nie"&rodzaj_ksiazki=="przedmiotowa"&dziedzina_PBL=="bez_ukd_PBL") %>%
@@ -2683,15 +2691,17 @@ count <- as.data.frame(table(bn_ok$redaktor_dzialu,bn_ok$czy_automatycznie)) %>%
 count2 <- as.data.frame(table(bn_ok$czy_automatycznie))
 
 #realne statystyki po podmiotowej
-# test <- bn_ok %>% 
-#   left_join(out %>% select(rekord_BN,pracownik),by=c("ZA_UWAGI"="rekord_BN")) %>% 
+# test <- bn_ok %>%
+#   left_join(out %>% select(rekord_BN,pracownik),by=c("ZA_UWAGI"="rekord_BN")) %>%
 #   mutate(pracownik = ifelse(is.na(pracownik),as.character(redaktor_dzialu),as.character(pracownik)),
 #          pracownik = str_replace(pracownik,"(^.*?)(\\_.*$)","\\1"))
 # 
-# count3 <- as.data.frame(table(test$pracownik))
-
-blabla <- test %>% 
-  filter(pracownik=="NA")
+# count3 <- as.data.frame(table(test$pracownik)) %>% 
+#   arrange(-Freq)
+# 
+# count4 <- as.data.frame(table(test$pracownik,test$DZ_NAZWA)) %>%
+#   filter(Var1=="EWA"&Freq>0) %>%
+#   arrange(-Freq)
 ```
 
 ```{r książki podmiotowe}
