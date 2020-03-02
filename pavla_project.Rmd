@@ -5,7 +5,6 @@ output: html_notebook
 
 ```{r}
 library(RSelenium)
-library(RCurl)
 library(XML)
 library(rvest)
 library(tidyverse)
@@ -18,17 +17,17 @@ library(purrr)
 library(sqldf)
 library(binman)
 
-#empty table
-table_data <- data.frame(stringsAsFactors=FALSE)
+
 #browser
 #list_versions("chromedriver")
-rD <- rsDriver(port=4444L,browser="chrome", chromever="78.0.3904.11")
+rD <- rsDriver(port=4444L,browser="chrome", chromever="79.0.3945.36")#"78.0.3904.11")
 remDr <- rD$client
 
 
 pages <- data.frame(url=c("http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090729_152643_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090814_145248_blogovy-roman_ven.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090830_133601_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090913_221745_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090927_204250_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091011_193104_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091025_205705_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091108_200500_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091122_195330_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091206_203908_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091220_175017_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090814_153618_blogovy-roman_ven.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090828_181703_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091002_155247_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091015_125624_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091030_103027_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091204_095600_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091208_163015_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091216_173919_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090730_132805_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090814_150720_blogovy-roman_ven.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090830_135629_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090913_215105_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090927_211140_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091011_191630_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091025_211101_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091108_194337_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091122_194606_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091206_202107_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091220_224008_blogovy-roman_jdv.html"),number=1:30)
 
-
+#empty table
+table_data <- data.frame(stringsAsFactors=FALSE)
 x <- 1:50
 y <- 1:30
 
@@ -37,7 +36,10 @@ for (j in y) {
   url <- pages$url[j]
   remDr$navigate(url)
 
-while (length(remDr$findElement(using = 'css selector', "div.m-bg-1:nth-child(2) div.m-bg-2 div.m-bg-3 div.m-bg-4 div.content:nth-child(2) div.col-a.moot-blog div.disc-list div.contribution:nth-child(1) table:nth-child(1) tbody:nth-child(1) tr:nth-child(1) td.cell > h4.name"))>0) {
+while (tryCatch({length(remDr$findElement(using = 'css selector', "div.m-bg-1:nth-child(2) div.m-bg-2 div.m-bg-3 div.m-bg-4 div.content:nth-child(2) div.col-a.moot-blog div.disc-list div.contribution:nth-child(1) table:nth-child(1) tbody:nth-child(1) tr:nth-child(1) td.cell > h4.name"))>0
+  }, error=function(e){
+    length(remDr$findElement(using = 'css selector', "div.m-bg-1:nth-child(3) div.m-bg-2 div.m-bg-3 div.m-bg-4 div.content:nth-child(2) div.col-a div.disc-list div.contribution:nth-child(1) table:nth-child(1) tbody:nth-child(1) tr:nth-child(1) td.cell > h4.name"))>0 
+  })) {
 for (i in x) {
   progress(match(i,x), max.value = length(x))
 
@@ -46,7 +48,7 @@ for (i in x) {
   tryCatch({
 name <- remDr$findElement(using = 'css selector', paste("div.m-bg-1:nth-child(2) div.m-bg-2 div.m-bg-3 div.m-bg-4 div.content:nth-child(2) div.col-a.moot-blog div.disc-list div.contribution:nth-child(",i,") table:nth-child(1) tbody:nth-child(1) tr:nth-child(1) td.cell > h4.name",sep = ""))
 }, error=function(e){
-  name <<- remDr$findElement(using = 'css selector', paste("div.m-bg-1:nth-child(2) div.m-bg-2 div.m-bg-3 div.m-bg-4 div.content:nth-child(2) div.col-a.moot-blog div.disc-list div.contribution:nth-child(",i,") table:nth-child(1) tbody:nth-child(1) tr:nth-child(1) td.cell > h4.name",sep = ""))
+  name <- remDr$findElement(using = 'css selector', paste("div.m-bg-1:nth-child(2) div.m-bg-2 div.m-bg-3 div.m-bg-4 div.content:nth-child(2) div.col-a.moot-blog div.disc-list div.contribution:nth-child(",i,") table:nth-child(1) tbody:nth-child(1) tr:nth-child(1) td.cell > h4.name",sep = ""))
 })
 name <- name$getElementText()
 name <- as.character(name)
