@@ -16,15 +16,16 @@ library(RJDBC)
 library(purrr)
 library(sqldf)
 library(binman)
+library(openxlsx)
 
 
 #browser
 #list_versions("chromedriver")
-rD <- rsDriver(port=4444L,browser="chrome", chromever="79.0.3945.36")#"78.0.3904.11")
+rD <- rsDriver(port=4444L,browser="chrome", chromever="79.0.3945.36")
 remDr <- rD$client
 
 
-pages <- data.frame(url=c("http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090729_152643_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090814_145248_blogovy-roman_ven.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090830_133601_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090913_221745_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090927_204250_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091011_193104_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091025_205705_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091108_200500_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091122_195330_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091206_203908_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091220_175017_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090814_153618_blogovy-roman_ven.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090828_181703_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091002_155247_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091015_125624_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091030_103027_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091204_095600_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091208_163015_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091216_173919_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090730_132805_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090814_150720_blogovy-roman_ven.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090830_135629_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090913_215105_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090927_211140_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091011_191630_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091025_211101_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091108_194337_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091122_194606_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091206_202107_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091220_224008_blogovy-roman_jdv.html"),number=1:30)
+pages <- data.frame(url=c("http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090729_152643_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090814_145248_blogovy-roman_ven.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090830_133601_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090913_221745_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090927_204250_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091011_193104_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091025_205705_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091108_200500_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091122_195330_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091206_203908_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091220_175017_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090814_153618_blogovy-roman_ven.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090828_181703_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091002_155247_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091015_125624_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091030_103027_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091204_095600_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091208_163015_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091216_173919_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090730_132805_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090814_150720_blogovy-roman_ven.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090830_135629_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090913_215105_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A090927_211140_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091011_191630_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091025_211101_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091108_194337_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091122_194606_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091206_202107_blogovy-roman_jdv.html","http://data.idnes.cz/BlogovyRoman/diskuse.aspx@iddiskuse=A091220_224008_blogovy-roman_jdv.html"),number=1:30,thread=c("Úvodní kapitola","I.kapitola","II.kapitola","III.kapitola","IV.kapitola","V.kapitola","VI.kapitola","VII.kapitola","VIII.kapitola","IX.kapitola","X.kapitola","Hlas poroty-poprvé","Hlas poroty-podruhé","Hlas poroty-potřetí","Hlas poroty-počtvrté","Hlas poroty-popáté","Hlas poroty-pošesté","Hlas poroty-posedmé","Hlas poroty-poosmé","Rady, jak psát","Komentář k I.kapitole","Komentář k II.kapitole","Komentář ke III.kapitole","Komentář ke IV.kapitole","Komentář k V.kapitole","Komentář k VI.kapitole","Komentář k VII.kapitole","Komentář k VIII.kapitole","Komentář k IX.kapitole","Komentář k X.kapitole"))
 
 #empty table
 table_data <- data.frame(stringsAsFactors=FALSE)
@@ -74,56 +75,113 @@ if(inherits(possibleError, "error")) break
 }
 }
 
+table_data <- table_data %>% 
+  left_join(pages %>% mutate(number=as.character(number)),by=c("j"="number"))
+  select(-j)
+  
+test <- table_data %>% 
+  mutate(group_id = 1:nrow(.),
+         group_id = ifelse(!grepl("^Re\\: ",title),as.integer(group_id),NA)) %>% 
+  fill(group_id,.direction = "down")
 
-dalsi <- remDr$findElement(using = 'css selector', "div.m-bg-1:nth-child(2) div.m-bg-2 div.m-bg-3 div.m-bg-4 div.content:nth-child(2) div.col-a.moot-blog div.disc-list table.nav-n4.ico:nth-child(51) tbody:nth-child(1) tr:nth-child(1) td.tar a.ico-right > span:nth-child(1)")
+count <- as.data.frame(table(test$group_id))
 
+test <- test %>% 
+  mutate(group_id = as.character(group_id)) %>% 
+  left_join(count %>% rename(group_size=Freq),by=c("group_id"="Var1"))
+  
+count2 <- as.data.frame(table(test$name))
 
+test <- test %>% 
+  mutate(group_id = as.character(group_id)) %>% 
+  left_join(count2 %>% rename(person_size=Freq),by=c("name"="Var1"))
 
-tryCatch({
-  role <- remDr$findElement(using = 'css selector', 'h3')
-  role <- role$getElementText()
-  role <- as.character(role)
-  }, error=function(e){
-                      role <<- "Brak danych (CR)"
-  })
+write.xlsx(test, "C:/Users/Cezary/Desktop/pavla_blognovel.xlsx",sheetName = "gotowe")
 
+###
+#second web scraping
 
-  tryCatch({
-name <- remDr$findElement(using = 'css selector', paste("div.m-bg-1:nth-child(2) div.m-bg-2 div.m-bg-3 div.m-bg-4 div.content:nth-child(2) div.col-a.moot-blog div.disc-list div.contribution:nth-child(",i,") table:nth-child(1) tbody:nth-child(1) tr:nth-child(1) td.cell > h4.name",sep = ""))
-}, error=function(e){
-  name <<- remDr$findElement(using = 'css selector', paste("div.m-bg-1:nth-child(2) div.m-bg-2 div.m-bg-3 div.m-bg-4 div.content:nth-child(2) div.col-a.moot-blog div.disc-list div.contribution:nth-child(",i,") table:nth-child(1) tbody:nth-child(1) tr:nth-child(1) td.cell > h4.name",sep = ""))
-})
+page2 <- data.frame(url = c("http://www.saspi.cz/kniha-sbirka/155-o-princi-a-bilem-jednorozci","http://www.saspi.cz/kniha-sbirka/592-cesta-za-bilou-lodi-cast-1","http://www.saspi.cz/kniha-sbirka/155-zlaty-drak-1c","http://www.saspi.cz/kniha-sbirka/591-narod-prokletych","http://www.saspi.cz/kniha-sbirka/490-cerny-jezdec-ruka-spravedlnosti-01","http://www.saspi.cz/kniha-sbirka/676-enyalie-or-ohta-1","http://www.saspi.cz/kniha-sbirka/1401-omalora-1"),number=1:7,stringsAsFactors = FALSE)
 
-number <- 10
+total <- data.frame(stringsAsFactors = FALSE)
+y <- 1:nrow(page2)
+for (j in y) {
+  
+url <- page2$url[j]
+remDr$navigate(url)
 
-while (number > 0)  {
-  if (number == 3)  {
-    print(paste("Coming out from While loop Where number =  ", number))
-    break
-  }
-  print(paste("Values are :  ", number))
-  number = number - 1
+date_of_chapter <- remDr$findElements(using = 'css selector', ".list td:nth-child(1)")
+date_of_chapter <- sapply(date_of_chapter, function(x) x$getElementText())
+date_of_chapter <- as.character(date_of_chapter)
+
+title_of_chapter <- remDr$findElements(using = 'css selector', ".list a")
+title_of_chapter <- sapply(title_of_chapter, function(x) x$getElementText())
+title_of_chapter <- as.character(title_of_chapter)
+
+set <- data.frame(date_of_chapter,title_of_chapter)
+
+x <- 1:nrow(set)
+
+for (i in x) {
+  progress(match(i,x), max.value = length(x))
+  link <- remDr$findElement(using = 'css selector', paste("table.text_main table.list tbody:nth-child(1) tr:nth-child(",i+1,") td:nth-child(2) > a:nth-child(1)",sep = ""))
+  link$clickElement()
+  user_name <- remDr$findElements(using = 'css selector', ".change_nl b")
+  user_name <- sapply(user_name, function(x) x$getElementText())
+  user_name <- as.character(user_name)
+  
+  comment_date <- remDr$findElements(using = 'css selector', ".text_main .text_main .text_main .text_main .text_main .text_small")
+  comment_date <- sapply(comment_date, function(x) x$getElementText())
+  comment_date <- as.character(comment_date)
+  
+  comment_date2 <- remDr$findElements(using = 'css selector', ".text_main .note i")
+  comment_date2 <- sapply(comment_date2, function(x) x$getElementText())
+  comment_date2 <- as.character(comment_date2)
+  
+  test <- data.frame(user_name) %>% 
+  mutate(type_of_comment = ifelse(grepl("\\:",user_name),"reply","original")) %>% 
+  group_by(type_of_comment) %>% 
+  mutate(seq=1:n()) %>% 
+  ungroup() %>% 
+  unite("type_of_comment", type_of_comment:seq, sep = "")
+
+test2 <- data.frame(comment_date) %>% 
+  mutate(type_of_comment = paste("original",seq(1:n()),sep = ""))
+
+test3 <- data.frame(comment_date2) %>% 
+  mutate(type_of_comment = paste("reply",seq(1:n()),sep = ""))
+
+comments <- test %>% 
+  left_join(bind_rows(test2,test3 %>% rename(comment_date=comment_date2)),by = "type_of_comment") %>% 
+  mutate(user_name = str_remove(user_name,"\\:$"),
+         type_of_comment = str_remove(type_of_comment,"\\d+$"),
+         comment_date = str_remove(comment_date,"^ze dne "))
+
+iteration <- data.frame(comments,set %>% slice(i))
+total <- rbind(total,iteration)
+remDr$goBack()
 }
+}
+total$novel_id <- cumsum(!duplicated(total[5]))
+
+count <- as.data.frame(table(total$user_name))
+
+total <- total %>% 
+  left_join(count %>% rename(person_size=Freq),by=c("user_name"="Var1"))
+
+blabla <- total
+x <- 1:nrow(total)
+for (i in x) {
+  progress(match(i,x), max.value = length(x))
+  tryCatch({
+blabla$distance[i] <- length(seq(from=as.Date(total$date_of_chapter[i], "%d.%m.%Y"), to=as.Date(str_extract(total$comment_date[i],"(^.*?)(?=,.*$)"), "%d.%m.%Y"), by="day")) - 1
+}, error=function(e){
+  blabla$distance[i] <<- "error"
+})
+}
+write.xlsx(blabla, "C:/Users/Cezary/Desktop/pavla_annun.xlsx",sheetName = "gotowe")
 
 
-
-webElem <- remDr$findElement(using = 'css selector', "#ctl00_pageContent_tabPage_ucSearch_pnlSearch_lupPerson1_txtValues_I")
-webElem$clickElement()
-Sys.sleep(3)
-sbox <- remDr$findElement(using = 'css selector', "#ctl00_pageContent_tabPage_ucSearch_pnlSearch_lupPerson1_popup_gridLookup_DXFREditorcol1_I")
-sbox$sendKeysToElement(list("Topol, Josef"))
-Sys.sleep(5)
-webElem2 <- remDr$findElement(using = 'css selector', "table.tabTight table.c.tabTight.tabContent:nth-child(3) tr.cContent:nth-child(1) td.cContent div.content div.dxtcLite.tabPageControl.dxtcSys.dxtc-flex.dxtc-top.dxtc-pc:nth-child(2) div.dxtc-content div.dxpnlControl:nth-child(2) table.search table.insearch div.dxpcLite.dxpclW:nth-child(16) div.dxpc-mainDiv.dxpc-shadow div.dxpc-contentWrapper div.dxpc-content table.dxgvControl.dxgv:nth-child(2) td:nth-child(1) table.dxgvTable:nth-child(1) tbody:nth-child(1) tr.dxgvDataRow.dxgvLVR.dxgvFocusedRow:nth-child(3) > td.dxgv.dx-al:nth-child(2)")
-webElem2$clickElement()
-webElem3 <- remDr$findElement(using = "xpath", "//div[@id='ctl00_pageContent_tabPage_ucSearch_pnlSearch_btnSearch_CD']//span[@class='dx-vam'][contains(text(),'Search')]")
-webElem3$clickElement()
-webElem4 <- remDr$findElement(using = 'css selector', "table.tabTight table.c.tabTight.tabContent:nth-child(3) tr.cContent:nth-child(1) td.cContent div.content div.dxtcLite.tabPageControl.dxtcSys.dxtc-flex.dxtc-top.dxtc-pc:nth-child(1) div.dxtc-content div.dxpnlControl:nth-child(2) div.dxpnlControl table.dxgvControl.roundCorner.dxgv:nth-child(6) div.dxgvPagerBottomPanel td.rightmedskip.wmax:nth-child(5) tr:nth-child(2) td.center div:nth-child(2) a.dxp-button.dxp-bi.inlineTable > img.dxWeb_pAll")
-webElem4$clickElement()
-
-zzz <- remDr$findElement(using = 'css selector', "#ctl00_pageContent_tabPage_ucSearch_pnlSearch_resultList_pnlList_gvResultList_DXMainTable")
-test <- zzz$
-test <- as.data.frame(zzz)
-zzz <- unlist(strsplit(zzz[[1]], "\n"))
 ```
 
 
