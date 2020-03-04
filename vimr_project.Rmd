@@ -1,0 +1,119 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+
+#biblioteki
+options(java.parameters = "-Xmx32000m")
+options(scipen = 999)
+pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,openxlsx,jsonlite,reshape2,RSelenium,XML,methods)
+
+`%notin%` <- Negate(`%in%`)
+
+#reading cz authority file and processing to table
+cz_authorities <- readLines("C:/Users/Cezary/Downloads/CLOselection.txt", encoding = "UTF-8")
+
+cz_authorities <- data.frame(cz_authorities) %>% 
+  mutate(cz_authorities = ifelse(grepl("       ",cz_authorities),str_replace(cz_authorities,"       "," AAA   "),as.character(cz_authorities)))
+cz_authorities <- cz_authorities %>% 
+  mutate(id = as.character(str_extract_all(cz_authorities, "^\\d{9}")),
+         field = str_replace_all(cz_authorities, "(\\d{9} )(\\w{3})(.*)", "\\2"),
+         content = str_replace_all(str_replace_all(cz_authorities,"(\\d{9} )(\\w{3})(\\s{3})(.*)","\\1\\2 \\4"),"(\\d{9} )(\\w{3})(\\d\\s|\\d\\d|\\s\\d){0,2}( L )(.*)","\\3\\5"),
+         id_field = paste(id,field,sep = "|"))
+count <- cz_authorities %>%
+  select(5,1)
+count <- as.data.frame(table(count$id_field))
+data1 <- cz_authorities %>% 
+  left_join(count,by=c("id_field"="Var1"))
+remove(count)
+
+data1_to_join <- data1 %>%
+  filter(Freq > 1) %>% 
+  group_by(id_field) %>% 
+  mutate(content = paste(content, collapse = "|")) %>% 
+  ungroup() %>% 
+  unique() %>% 
+  mutate(id = str_replace_all(id_field,"(\\d{9})(\\|)(.*)", "\\1"),
+         field = str_replace_all(id_field,"(\\d{9})(\\|)(.*)", "\\3")) %>% 
+  select(-Freq)
+
+data1 <- data1 %>%
+  filter(id_field %notin% data1_to_join$id_field) %>% 
+  bind_rows(data1_to_join) %>% 
+  arrange(id_field,field) %>% 
+  select(2,3,4) %>% 
+  mutate(field = paste("X",field,sep = ""))
+remove(data1_to_join)
+
+f.agg <- function(x) paste(unique(x), collapse = "~")
+data_table <- dcast(data1, id ~ field, value.var="content", fun.aggregate = f.agg)
+
+#extracting value with name from the field no. 100
+marc_field_100 <- data_table %>%
+  select(X001,X100)%>%
+  filter(X100!="") %>% 
+  mutate(X100 = str_replace_all(X100,"(^|\\|)","~\\1")) %>% 
+  cSplit("X100",sep = "~",direction = "long") %>% 
+  filter(X100!="") %>% 
+  mutate(X100 = str_remove_all(X100,"^\\|"),
+         indicator = str_replace_all(X100,"(^.*?)(\\$.*)","\\1"))
+subfield_list<- str_extract_all(data_table$X100,"\\${2}.")
+subfield_list<- unique(unlist(subfield_list))
+empty_table<- data.frame(matrix(ncol = length(subfield_list),nrow = lengths(marc_field_100)[1]))
+colnames(empty_table) <-subfield_list
+
+marc_field_100<-cbind(marc_field_100,empty_table)
+
+subfield_list_char <- paste("(",subfield_list,")",sep = "")
+subfield_list_char <- str_replace_all(subfield_list_char,"\\$","\\\\$")
+
+x <- 1:length(subfield_list)
+
+for (i in x) {
+  marc_field_100$X100 <- str_replace(marc_field_100$X100,subfield_list_char[i],"|\\1")
+  progress(match(i,x), max.value = length(x)) 
+}
+for (i in x) {
+  progress(match(i,x), max.value = length(x))
+  subfield_list_char2 <- str_replace_all(subfield_list,"\\$","\\\\$")
+  string_a <- "(^)(.*?\\|"
+  string_b <- subfield_list_char2[i]
+  string_c <- ")(.*?)(\\,{0,1})((\\|\\${2})(.*)|$)"
+  string <- paste(string_a,string_b,string_c,sep = "")
+  marc_field_100[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_100$X100),str_replace_all(gsub(string,"\\3",marc_field_100$X100),"\\${2}.", "~"),NA)
+}
+
+#extracting all local id from VIAF
+marc_field_100 <- marc_field_100 %>% 
+  filter(!is.na(`$$7`))#,
+         #grepl("\\d+",`$$7`))
+rD <- rsDriver(port=4444L,browser="chrome", chromever="79.0.3945.36")
+remDr <- rD$client
+
+x <- 10454:nrow(marc_field_100)
+cz_viaf_ids <- data.frame(stringsAsFactors = FALSE)
+for (i in x) {
+  progress(match(i,x), max.value = length(x))
+  url <- paste("http://viaf.org/viaf/sourceID/NKC%7C",marc_field_100$`$$7`[i],sep = "")
+  remDr$navigate(url)
+  viaf_id <- str_replace(as.character(remDr$getCurrentUrl()),"https","http")
+  xml <- xmlParse(paste(viaf_id,"viaf.xml",sep = ""))
+  tryCatch({
+    IDs <- setNames(xmlToDataFrame(nodes = getNodeSet(xml, "//ns1:VIAFCluster/ns1:mainHeadings/ns1:data/ns1:sources/ns1:sid")),"Identyfikatory")
+    IDs <- paste(unlist(IDs), collapse = "~")
+    }, error=function(e){
+      IDs <<- "Brak danych (CR)"
+      })
+  iteration <- cbind(cz_name=marc_field_100$`$$a`[i],viaf_id,IDs)
+  cz_viaf_ids <- rbind(cz_viaf_ids,iteration)
+}
+
+cz_viaf_ids_long <- cz_viaf_ids %>% 
+  cSplit("IDs",sep = "~",direction = "long")
+
+write.xlsx(cz_viaf_ids_long, "C:/Users/Cezary/Desktop/cz_viaf_ids_long.xlsx")
+
+```
+
