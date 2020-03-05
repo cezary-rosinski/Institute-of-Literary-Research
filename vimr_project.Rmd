@@ -275,6 +275,8 @@ for (a in b) {
 data_full_wide <- dcast(data_full, id ~ field, value.var="content", fun.aggregate = f.agg)
 #write.xlsx(data_full_wide, "C:/Users/Cezary/Desktop/data_full_wide.xlsx")
 
+#nie ma pola 041, w 008 są śmieci, wyczyścić listę nazwisk dopasowaniem dokładnym
+
 
 ```
 
