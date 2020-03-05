@@ -8,8 +8,8 @@ output: html_notebook
 #biblioteki
 options(java.parameters = "-Xmx32000m")
 options(scipen = 999)
-pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,openxlsx,jsonlite,reshape2,RSelenium,XML,methods)
-
+options(warn=-1)
+pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,openxlsx,jsonlite,reshape2,RSelenium,XML,methods,xml2)
 `%notin%` <- Negate(`%in%`)
 
 #reading cz authority file and processing to table
@@ -113,7 +113,169 @@ for (i in x) {
 cz_viaf_ids_long <- cz_viaf_ids %>% 
   cSplit("IDs",sep = "~",direction = "long")
 
-write.xlsx(cz_viaf_ids_long, "C:/Users/Cezary/Desktop/cz_viaf_ids_long.xlsx")
+#write.xlsx(cz_viaf_ids_long, "C:/Users/Cezary/Desktop/cz_viaf_ids_long.xlsx")
+
+# selection of national libraries: Polish: PLWABN, Swedish: SELIBR
+
+pl_swe_viaf <- cz_viaf_ids_long %>% 
+  filter(grepl("PLWABN|SELIBR",IDs)) %>% 
+  select(name=cz_name,viaf_id) %>% 
+  unique() %>% 
+  arrange(name) %>% 
+  mutate(in_polish = TRUE,
+         in_swedish = TRUE)
+
+#downloading all person's name forms from selected libraries
+
+x <- 1:nrow(pl_swe_viaf)
+full_data_pl_swe <- data.frame(stringsAsFactors = FALSE)
+for (i in x) {
+  progress(match(i,x), max.value = length(x))
+  url <- paste(pl_swe_viaf$viaf_id[i],"viaf.xml",sep = "")
+  xml <- read_xml(url)
+  baz <- xml_find_all(xml,".//ns1:x400s/ns1:x400/ns1:datafield/ns1:subfield")
+  test <- baz %>% xml_attr("code")
+  test2 <- xml_text(baz)
+  baz2 <- xml_find_all(xml,".//ns1:x400s/ns1:x400/ns1:sources")
+  test3 <- data.frame(test3 = xml_text(baz2))
+  test <- data.frame(test,test2) %>% 
+    filter(test=="a",
+           !grepl("\\:$",test2)) %>% 
+    mutate(test2 = as.character(test2)) %>% 
+    bind_cols(test3 %>% mutate(test3 = as.character(test3))) %>% 
+    filter(grepl("PLWABN|SELIBR",test3)) %>% 
+    mutate(in_polish = ifelse(grepl("PLWABN",test3),TRUE,FALSE),
+           in_swedish = ifelse(grepl("SELIBR",test3),TRUE,FALSE),
+           viaf_id = pl_swe_viaf$viaf_id[i]) %>% 
+    select(name = test2,in_polish,in_swedish,viaf_id)
+  iteration <- pl_swe_viaf[i,] %>% 
+    bind_rows(test)
+  full_data_pl_swe <- rbind(full_data_pl_swe,iteration)
+}
+
+#write.xlsx(full_data_pl_swe, "C:/Users/Cezary/Desktop/full_data_pl_swe.xlsx")
+```
+
+```{r Swedish}
+swedish_data <- full_data_pl_swe %>% 
+  filter(in_swedish==T) %>% 
+  select(1,2)
+f.agg <- function(x) paste(unique(x), collapse = "~")
+#queries in Swedish library
+
+x <- 1601:nrow(swedish_data)
+data_full <- data.frame(stringsAsFactors = FALSE)
+for (i in x) {
+  progress(match(i,x), max.value = length(x))
+  url <- paste("http://libris.kb.se/xsearch?query=forf:(",str_replace_all(swedish_data$name[i]," ","%20"),")&start=1&n=200&format=marcxml",sep = "")
+  
+  tryCatch({
+
+  doc <- read_xml(url)
+  
+  node <- xml_find_all(doc, "//xsearch")
+  node_att <- xml_attr(node, "records")
+  if (node_att>0) {
+    
+  b <- 1:as.integer(node_att)
+  b <- split(b, ceiling(seq_along(b)/200))
+  b <- as.integer(lapply(b, `[[`, 1))
+for (a in b) {
+  url <- paste("http://libris.kb.se/xsearch?query=forf:(",str_replace_all(swedish_data$name[i]," ","%20"),")&start=",a,"&n=200&format=marcxml",sep = "")
+  
+  nodes <- xml_find_all(doc, ".//marc:record")
+  nodes_controlfield <- xml_find_all(doc, ".//marc:record/marc:controlfield")
+  nodenum_controlfield <- xml_attr(nodes_controlfield, "tag")
+  nodes_datafield <- xml_find_all(doc, ".//marc:record/marc:datafield")
+  nodenum_datafield <- xml_attr(nodes_datafield, "tag")
+  nodes_subfield <- xml_find_all(doc, ".//marc:record/marc:datafield/marc:subfield")
+  nodenum_subfield <- xml_attr(nodes_subfield, "code")
+  nodeslength<-xml_length(nodes)
+  nodeslength2<-xml_length(nodes_datafield)
+  nodenames<-xml_name(xml_children(nodes))
+  nodenames_datafield<-xml_name(xml_children(nodes_datafield))
+  nodevalues<-trimws(xml_text(xml_children(nodes)))
+  nodevalues2<-trimws(xml_text(xml_children(nodes_datafield)))
+  nodenum_controlfield <- data.frame(nodenum = nodenum_controlfield) %>% 
+    mutate(nodenames = paste("controlfield",seq(1:n()),sep = ""),
+           nodenum = as.character(nodenum))
+  nodenum_datafield <- data.frame(nodenum = nodenum_datafield) %>% 
+    mutate(nodenames = paste("datafield",seq(1:n()),sep = ""),
+           nodenum = as.character(nodenum))
+  test <- data.frame(nodenames = nodenames) %>% 
+    bind_cols(nodevalues = nodevalues) %>% 
+    group_by(nodenames) %>% 
+    mutate(seq=1:n()) %>% 
+    ungroup() %>% 
+    unite("nodenames", c(nodenames,seq), sep = "") %>% 
+    left_join(bind_rows(nodenum_controlfield,nodenum_datafield),by="nodenames") %>% 
+    mutate(nodenum = ifelse(is.na(nodenum),"LDR",as.character(nodenum)))
+  test2 <- data.frame(nodeslength2) %>% 
+    mutate(nodenames = paste("datafield",seq(1:n()),sep = ""))
+  test <- test %>% 
+    left_join(test2,by="nodenames")
+  test <- test %>% 
+    mutate(nodeslength2 = ifelse(!is.na(nodeslength2),as.integer(nodeslength2),0))
+  y <- 1:nrow(test)
+  for (j in y) {
+    test$nodenames2[j] <- ifelse(test$nodeslength2[j]>0,paste("subfield",paste(replicate(test$nodeslength2[j],"|"),collapse = ""),sep = ""),NA)
+  }
+  deeper_nodes<- data.frame(nodenames = nodenames_datafield) %>% 
+    bind_cols(nodenums = nodenum_subfield) %>% 
+    bind_cols(nodevalue = nodevalues2) %>% 
+    mutate(seq=1:n()) %>% 
+    unite("nodenames", c(nodenames,seq), sep = "")
+  testowy <- test %>% 
+    cSplit("nodenames2",sep = "|",direction = "long") %>% 
+    mutate(nodenames = str_remove(nodenames,"\\d+$")) %>% 
+    group_by(nodenames) %>% 
+    mutate(nodenames2 = ifelse(nodenames=="datafield",paste("subfield",seq(1:n()),sep = ""),NA)) %>% 
+    ungroup() %>% 
+    left_join(deeper_nodes,by = c("nodenames2"="nodenames"))
+  testowy2 <- testowy %>% 
+    mutate(content = ifelse(!is.na(nodevalue),paste("$",as.character(nodenums),as.character(nodevalue),sep = ""),as.character(nodevalues))) %>%
+    mutate(record_group = ifelse(nodenum=="LDR",seq(1:n()),NA)) %>%
+    fill(record_group) %>%
+    mutate(id = ifelse(nodenum=="001",as.character(content),NA)) %>%
+    group_by(record_group) %>%
+    fill(id,.direction = "downup") %>%
+    ungroup() %>%
+    select(id,field=nodenum,content) %>% 
+    mutate(id_field = paste(id,field,sep = "|"))
+  if (nrow(testowy2)>0) {
+    count <- testowy2 %>%
+      select(4,3)
+    count <- as.data.frame(table(count$id_field))
+    data1 <- testowy2 %>%
+      left_join(count %>% mutate(Var1 = as.character(Var1)),by=c("id_field"="Var1"))
+    data1_to_join <- data1 %>%
+      filter(Freq > 1) %>%
+      group_by(id_field) %>%
+      mutate(content = paste(content, collapse="|")) %>%
+      ungroup() %>%
+      unique() %>%
+      mutate(id = str_replace_all(id_field,"(.*)(\\|)(.*)", "\\1"),
+             field = str_replace_all(id_field,"(.*)(\\|)(.*)", "\\3")) %>%
+      select(-Freq)
+    data1 <- data1 %>%
+      filter(id_field %notin% data1_to_join$id_field) %>%
+      bind_rows(.,data1_to_join) %>%
+      arrange(id_field,field) %>%
+      select(1,2,3)
+    remove(data1_to_join)
+    data_full <- data_full %>%
+      bind_rows(.,data1)
+  } 
+}
+  }
+  }, error=function(e){
+      })
+}
+
+data_full_wide <- dcast(data_full, id ~ field, value.var="content", fun.aggregate = f.agg)
+#write.xlsx(data_full_wide, "C:/Users/Cezary/Desktop/data_full_wide.xlsx")
+
 
 ```
+
 
