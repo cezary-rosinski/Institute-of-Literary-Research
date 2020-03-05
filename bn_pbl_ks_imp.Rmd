@@ -16,12 +16,12 @@ options(scipen = 999)
 pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,arrangements,tokenizers,openxlsx,jsonlite)
 `%notin%` <- Negate(`%in%`)
 #połączenie z bazą PBL
-jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Cezary/Downloads/ojdbc6.jar")
+jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Nikodem/Downloads/ojdbc6.jar")
 PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "IBL_SELECT", "CR333444")
 
 #wgranie zbiorów książek
 #aktualizacja - wprowadź właściwą ścieżkę pliku (zmień rok)
-bn_ks <- read.csv2("C:/Users/Cezary/Downloads/bn_ks_2012.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
+bn_ks <- read.csv2("C:/Users/Nikodem/Downloads/bn_ks_2012.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
   mutate(rok = str_sub(X008,8,11)) %>% 
   #aktualizacja - wprowadź do filtra właściwy rok
   filter(rok == 2012,
@@ -919,7 +919,7 @@ bn_ok <- bn_ok %>%
 
 ###czy i jak automatyzować przedmiotową?
 
-#write.csv2(bn_ok, "C:/Users/Cezary/Desktop/bn_ok_2009.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+#write.csv2(bn_ok, "C:/Users/Nikodem/Desktop/bn_ok_2009.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 chunk6 <- bn_ok
 ```
 
@@ -952,7 +952,7 @@ na_pozniej <- bn_ok %>%
 #          lata_temat = ifelse(grepl("\\d{2}-",X600),str_replace(X600,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA)) %>%
 # filter((is.na(lata)&is.na(lata_temat))|!(as.integer(lata)<1800)|!(as.integer(lata_temat)<1800))
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(na_pozniej, "C:/Users/Cezary/Desktop/bn_2012_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(na_pozniej, "C:/Users/Nikodem/Desktop/bn_2012_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 bn_ok <- sqldf("select *
                from bn_ok a
@@ -3498,12 +3498,16 @@ BN_wydawnictwo <- data %>%
 BN_wydawnictwo$id_grupy <- cumsum(!duplicated(BN_wydawnictwo[1:3]))
 BN_wydawnictwo <- BN_wydawnictwo[!duplicated(BN_wydawnictwo$id_grupy),] %>%
   mutate(WY_NAZWA = ifelse(!is.na(WY_NAZWA),as.character(WY_NAZWA),as.character(wydawnictwo)),
-         WY_MIASTO = ifelse(!is.na(WY_MIASTO),as.character(WY_MIASTO),as.character(miejsce_wydania)),
+         WY_MIASTO = ifelse(!is.na(WY_MIASTO),as.character(WY_MIASTO),trim(as.character(miejsce_wydania))),
          rok_wydania = str_replace_all(rok_wydania, "(.*)(\\.)", "\\1"),
          za_rok_wydania = ifelse(nchar(rok_wydania)==4,as.character(rok_wydania),NA),
          do_opisu = ifelse(is.na(za_rok_wydania),paste("[",str_extract(rok_wydania,"\\d{4}"),"]",sep = ""),""),
          WY_MIASTO = ifelse(substr(WY_MIASTO,1,1)=="["&substr(WY_MIASTO,nchar(WY_MIASTO),nchar(WY_MIASTO))!="]"&is.na(WY_WYDAWNICTWO_ID),paste(trim(WY_MIASTO),"]",sep = ""),as.character(WY_MIASTO))) %>%
-  select(ZA_UWAGI,WY_WYDAWNICTWO_ID,WY_NAZWA,WY_MIASTO,za_rok_wydania,do_opisu)
+  select(ZA_UWAGI,WY_WYDAWNICTWO_ID,WY_NAZWA,WY_MIASTO,za_rok_wydania,do_opisu) %>% 
+  mutate(WY_NAZWA = ifelse(str_count(WY_NAZWA, "\\[")>str_count(WY_NAZWA, "\\]"), paste(WY_NAZWA, "]", sep = ""),
+                           ifelse(str_count(WY_NAZWA, "\\[")<str_count(WY_NAZWA, "\\]"), paste("[", WY_NAZWA, sep = ""), as.character(WY_NAZWA))),
+         WY_MIASTO = ifelse(str_count(WY_MIASTO, "\\[")>str_count(WY_MIASTO, "\\]"), paste(WY_MIASTO, "]", sep = ""),
+                           ifelse(str_count(WY_MIASTO, "\\[")<str_count(WY_MIASTO, "\\]"), paste("[", WY_MIASTO, sep = ""), as.character(WY_MIASTO))))
 
 #11: opis fizyczny książki
 #pole 300 do opisu fizycznego
@@ -3781,7 +3785,7 @@ automatyczny_IOK <- polaczone %>%
   filter(rekord_BN %notin% data$ZA_UWAGI[data$czy_automatycznie=="nie"]) %>%
   mutate(powinno_byc = "IOK")
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(automatyczny_IOK, "C:/Users/Cezary/Desktop/imp_2012_automatyczne_podmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(automatyczny_IOK, "C:/Users/Nikodem/Desktop/imp_2012_automatyczne_podmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 out <- cSplit(polaczone, c("am_autor_id", "am_nazwisko", "am_imie","os_osoba_id","os_nazwisko", "os_imie", "fo_symbol","wy_wydawnictwo_id","wy_miejsce","wy_nazwa"),sep = "|",direction = "long") %>%
   unique()
@@ -3890,7 +3894,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2012_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2012_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -4613,12 +4617,16 @@ BN_wydawnictwo <- data %>%
 BN_wydawnictwo$id_grupy <- cumsum(!duplicated(BN_wydawnictwo[1:3]))
 BN_wydawnictwo <- BN_wydawnictwo[!duplicated(BN_wydawnictwo$id_grupy),] %>%
   mutate(WY_NAZWA = ifelse(!is.na(WY_NAZWA),as.character(WY_NAZWA),as.character(wydawnictwo)),
-         WY_MIASTO = ifelse(!is.na(WY_MIASTO),as.character(WY_MIASTO),as.character(miejsce_wydania)),
+         WY_MIASTO = ifelse(!is.na(WY_MIASTO),as.character(WY_MIASTO),trim(as.character(miejsce_wydania))),
          rok_wydania = str_replace_all(rok_wydania, "(.*)(\\.)", "\\1"),
          za_rok_wydania = ifelse(nchar(rok_wydania)==4,as.character(rok_wydania),NA),
          do_opisu = ifelse(is.na(za_rok_wydania),paste("[",str_extract(rok_wydania,"\\d{4}"),"]",sep = ""),""),
          WY_MIASTO = ifelse(substr(WY_MIASTO,1,1)=="["&substr(WY_MIASTO,nchar(WY_MIASTO),nchar(WY_MIASTO))!="]"&is.na(WY_WYDAWNICTWO_ID),paste(trim(WY_MIASTO),"]",sep = ""),as.character(WY_MIASTO))) %>%
-  select(ZA_UWAGI,WY_WYDAWNICTWO_ID,WY_NAZWA,WY_MIASTO,za_rok_wydania,do_opisu)
+  select(ZA_UWAGI,WY_WYDAWNICTWO_ID,WY_NAZWA,WY_MIASTO,za_rok_wydania,do_opisu) %>% 
+  mutate(WY_NAZWA = ifelse(str_count(WY_NAZWA, "\\[")>str_count(WY_NAZWA, "\\]"), paste(WY_NAZWA, "]", sep = ""),
+                           ifelse(str_count(WY_NAZWA, "\\[")<str_count(WY_NAZWA, "\\]"), paste("[", WY_NAZWA, sep = ""), as.character(WY_NAZWA))),
+         WY_MIASTO = ifelse(str_count(WY_MIASTO, "\\[")>str_count(WY_MIASTO, "\\]"), paste(WY_MIASTO, "]", sep = ""),
+                           ifelse(str_count(WY_MIASTO, "\\[")<str_count(WY_MIASTO, "\\]"), paste("[", WY_MIASTO, sep = ""), as.character(WY_MIASTO))))
 
 #11: opis fizyczny książki
 #pole 300 do opisu fizycznego
@@ -4992,7 +5000,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2012_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2012_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -5692,12 +5700,16 @@ BN_wydawnictwo <- data %>%
 BN_wydawnictwo$id_grupy <- cumsum(!duplicated(BN_wydawnictwo[1:3]))
 BN_wydawnictwo <- BN_wydawnictwo[!duplicated(BN_wydawnictwo$id_grupy),] %>%
   mutate(WY_NAZWA = ifelse(!is.na(WY_NAZWA),as.character(WY_NAZWA),as.character(wydawnictwo)),
-         WY_MIASTO = ifelse(!is.na(WY_MIASTO),as.character(WY_MIASTO),as.character(miejsce_wydania)),
+         WY_MIASTO = ifelse(!is.na(WY_MIASTO),as.character(WY_MIASTO),trim(as.character(miejsce_wydania))),
          rok_wydania = str_replace_all(rok_wydania, "(.*)(\\.)", "\\1"),
          za_rok_wydania = ifelse(nchar(rok_wydania)==4,as.character(rok_wydania),NA),
          do_opisu = ifelse(is.na(za_rok_wydania),paste("[",str_extract(rok_wydania,"\\d{4}"),"]",sep = ""),""),
          WY_MIASTO = ifelse(substr(WY_MIASTO,1,1)=="["&substr(WY_MIASTO,nchar(WY_MIASTO),nchar(WY_MIASTO))!="]"&is.na(WY_WYDAWNICTWO_ID),paste(trim(WY_MIASTO),"]",sep = ""),as.character(WY_MIASTO))) %>%
-  select(ZA_UWAGI,WY_WYDAWNICTWO_ID,WY_NAZWA,WY_MIASTO,za_rok_wydania,do_opisu)
+  select(ZA_UWAGI,WY_WYDAWNICTWO_ID,WY_NAZWA,WY_MIASTO,za_rok_wydania,do_opisu) %>% 
+  mutate(WY_NAZWA = ifelse(str_count(WY_NAZWA, "\\[")>str_count(WY_NAZWA, "\\]"), paste(WY_NAZWA, "]", sep = ""),
+                           ifelse(str_count(WY_NAZWA, "\\[")<str_count(WY_NAZWA, "\\]"), paste("[", WY_NAZWA, sep = ""), as.character(WY_NAZWA))),
+         WY_MIASTO = ifelse(str_count(WY_MIASTO, "\\[")>str_count(WY_MIASTO, "\\]"), paste(WY_MIASTO, "]", sep = ""),
+                           ifelse(str_count(WY_MIASTO, "\\[")<str_count(WY_MIASTO, "\\]"), paste("[", WY_MIASTO, sep = ""), as.character(WY_MIASTO))))
 
 #11: opis fizyczny książki
 #pole 300 do opisu fizycznego
@@ -6067,7 +6079,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2012_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2012_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -6608,12 +6620,16 @@ BN_wydawnictwo <- data %>%
 BN_wydawnictwo$id_grupy <- cumsum(!duplicated(BN_wydawnictwo[1:3]))
 BN_wydawnictwo <- BN_wydawnictwo[!duplicated(BN_wydawnictwo$id_grupy),] %>%
   mutate(WY_NAZWA = ifelse(!is.na(WY_NAZWA),as.character(WY_NAZWA),as.character(wydawnictwo)),
-         WY_MIASTO = ifelse(!is.na(WY_MIASTO),as.character(WY_MIASTO),as.character(miejsce_wydania)),
+         WY_MIASTO = ifelse(!is.na(WY_MIASTO),as.character(WY_MIASTO),trim(as.character(miejsce_wydania))),
          rok_wydania = str_replace_all(rok_wydania, "(.*)(\\.)", "\\1"),
          za_rok_wydania = ifelse(nchar(rok_wydania)==4,as.character(rok_wydania),NA),
          do_opisu = ifelse(is.na(za_rok_wydania),paste("[",str_extract(rok_wydania,"\\d{4}"),"]",sep = ""),""),
          WY_MIASTO = ifelse(substr(WY_MIASTO,1,1)=="["&substr(WY_MIASTO,nchar(WY_MIASTO),nchar(WY_MIASTO))!="]"&is.na(WY_WYDAWNICTWO_ID),paste(trim(WY_MIASTO),"]",sep = ""),as.character(WY_MIASTO))) %>%
-  select(ZA_UWAGI,WY_WYDAWNICTWO_ID,WY_NAZWA,WY_MIASTO,za_rok_wydania,do_opisu)
+  select(ZA_UWAGI,WY_WYDAWNICTWO_ID,WY_NAZWA,WY_MIASTO,za_rok_wydania,do_opisu) %>% 
+  mutate(WY_NAZWA = ifelse(str_count(WY_NAZWA, "\\[")>str_count(WY_NAZWA, "\\]"), paste(WY_NAZWA, "]", sep = ""),
+                           ifelse(str_count(WY_NAZWA, "\\[")<str_count(WY_NAZWA, "\\]"), paste("[", WY_NAZWA, sep = ""), as.character(WY_NAZWA))),
+         WY_MIASTO = ifelse(str_count(WY_MIASTO, "\\[")>str_count(WY_MIASTO, "\\]"), paste(WY_MIASTO, "]", sep = ""),
+                           ifelse(str_count(WY_MIASTO, "\\[")<str_count(WY_MIASTO, "\\]"), paste("[", WY_MIASTO, sep = ""), as.character(WY_MIASTO))))
 
 #11: opis fizyczny książki
 #pole 300 do opisu fizycznego
@@ -7029,7 +7045,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2012_wspolwydanie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2012_wspolwydanie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -7047,7 +7063,7 @@ Najpierw należy przeprowadzić import do bazy, a następnie egzekwować poniżs
 #automatyczny IOK dla rekordów bibliograficznych
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
 
-nadpisanie_zapisow_IOK <- read.csv2("C:/Users/Cezary/Desktop/imp_2012_automatyczne_podmiotowe.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE)
+nadpisanie_zapisow_IOK <- read.csv2("C:/Users/Nikodem/Desktop/imp_2012_automatyczne_podmiotowe.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE)
 
 #aktualizacja - wpisać w selekcie dla za_uwagi właściwą frazę dla rocznika, np. 'BN: 2009%'
 nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
@@ -7061,7 +7077,7 @@ nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
   mutate(ID2 = NA) %>% 
   select(ZA_ZAPIS_ID,ID2,jest,powinno_byc)
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Cezary/Desktop/2012_nadpisanie_zapisow_IOK.xlsx",sheetName = "ZA_STATUS_IMP")
+write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Nikodem/Desktop/2012_nadpisanie_zapisow_IOK.xlsx",sheetName = "ZA_STATUS_IMP")
 
 #bezpiecznik
 #automatyczny IOK dla nowych twórców w kartotece powinien zostać przeprowadzony z poziomu importera
@@ -7090,7 +7106,7 @@ rocznik_pbl_po_imporcie <- dbGetQuery(PBL,
   select(noquote(kolejnosc))
 rocznik_pbl_po_imporcie$pracownik[rocznik_pbl_po_imporcie$status=="IOK"] <- "AUTOMAT"
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Cezary/Desktop/ks_BN_2012_listy_pracowników.xlsx",sheetName = "lista_ksiazek")
+write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Nikodem/Desktop/ks_BN_2012_listy_pracowników.xlsx",sheetName = "lista_ksiazek")
 #utwórz nowy podfolder w folderze importu BN i prześlij listę na dysk, przygotuj widoki filtrów dla wszystkich osób i roześlij unikatowe linki
 ```
 
@@ -7192,7 +7208,7 @@ pbl_bn_viaf_import <- pbl_bn_viaf_import %>%
   unique()
 
 #zapisać plik i jego treść wkleić na dysk do tabeli "mapowanie_osob_bn_pbl_po_imporcie"
-write.xlsx(pbl_bn_viaf_import, "C:/Users/Cezary/Desktop/relacje_osobowe_pbl_bn.xlsx",sheetName = "pbl-bn")
+write.xlsx(pbl_bn_viaf_import, "C:/Users/Nikodem/Desktop/relacje_osobowe_pbl_bn.xlsx",sheetName = "pbl-bn")
 #następnie przeanalizować zawartość wkejonej części i zostawić "tak" w kolumnie F tylko dla poprawnych utożsamień (osoba w PBL to osoba w BN)
 ```
 
