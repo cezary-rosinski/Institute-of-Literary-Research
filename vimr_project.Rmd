@@ -8,7 +8,6 @@ output: html_notebook
 #biblioteki
 options(java.parameters = "-Xmx32000m")
 options(scipen = 999)
-options(warn=-1)
 pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,openxlsx,jsonlite,reshape2,RSelenium,XML,methods,xml2)
 `%notin%` <- Negate(`%in%`)
 
@@ -163,7 +162,7 @@ swedish_data <- full_data_pl_swe %>%
 f.agg <- function(x) paste(unique(x), collapse = "~")
 #queries in Swedish library
 
-x <- 1601:nrow(swedish_data)
+x <- 1:nrow(swedish_data)
 data_full <- data.frame(stringsAsFactors = FALSE)
 for (i in x) {
   progress(match(i,x), max.value = length(x))
@@ -261,7 +260,12 @@ for (a in b) {
       filter(id_field %notin% data1_to_join$id_field) %>%
       bind_rows(.,data1_to_join) %>%
       arrange(id_field,field) %>%
-      select(1,2,3)
+      select(1,2,3) %>% 
+      mutate(field = ifelse(field=="LDR","LDR~~",as.character(field)),
+             content = ifelse(field=="LDR~~",paste(content,"~~",sep = ""),as.character(content))) %>% 
+      cSplit(c("field","content"),sep = "~",direction = "long") %>% 
+      mutate(field = ifelse(field=="","viaf",as.character(field)),
+             content = ifelse(content=="",paste(swedish_data$name[i],viaf_id = swedish_data$viaf_id[i],sep = "|"),as.character(content)))
     remove(data1_to_join)
     data_full <- data_full %>%
       bind_rows(.,data1)
@@ -272,10 +276,27 @@ for (a in b) {
       })
 }
 
-data_full_wide <- dcast(data_full, id ~ field, value.var="content", fun.aggregate = f.agg)
+data_full_wide <- dcast(data_full, id ~ field, value.var="content", fun.aggregate = f.agg) %>% 
+  cSplit("viaf",sep = "~",direction = "long")
 #write.xlsx(data_full_wide, "C:/Users/Cezary/Desktop/data_full_wide.xlsx")
 
 #nie ma pola 041, w 008 są śmieci, wyczyścić listę nazwisk dopasowaniem dokładnym
+
+#dopasowanie dokładne
+
+x <- 1:nrow(data_full_wide)
+for (i in x) {
+  progress(match(i,x), max.value = length(x))
+  data_full_wide$person_match[i] <- ifelse(grepl(str_replace(data_full_wide$viaf[i],"(^.*?)(\\|.*$)","\\1"),data_full_wide$`100`[i]),TRUE,FALSE)
+}
+
+dobre <- data_full_wide %>% 
+  filter(person_match==TRUE) %>% 
+  select(-NA,-person_match) %>% 
+  mutate(viaf = str_replace(viaf,"(^.*\\|)(.*?$)","\\2")) %>% 
+  unique()
+write.xlsx(dobre, "C:/Users/Cezary/Desktop/dobre_szwedzkie.xlsx")
+
 
 
 ```

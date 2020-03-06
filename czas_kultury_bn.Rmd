@@ -1,0 +1,122 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+#biblioteki
+options(java.parameters = "-Xmx32000m")
+options(scipen = 999)
+pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,openxlsx,jsonlite,reshape2,RSelenium,XML,methods,xml2)
+`%notin%` <- Negate(`%in%`)
+
+f.agg <- function(x) paste(unique(x), collapse = "~")
+#queries in Swedish library
+
+url <- "http://data.bn.org.pl/api/bibs.marcxml?limit=100&amp;marc=773t+Czas+Kultury"
+url <- "http://data.bn.org.pl/api/bibs.marcxml?limit=100&amp;marc=630a+Czas+Kultury+%28czasop.%29"
+czas_kultury <- data.frame(stringsAsFactors = FALSE)
+while (length(xml_find_first(read_xml(url), ".//d1:record"))>0) {
+
+  doc <- read_xml(url)
+  nodes <- xml_find_all(doc, ".//d1:record")
+  nodes_controlfield <- xml_find_all(doc, ".//d1:record/d1:controlfield")
+  nodenum_controlfield <- xml_attr(nodes_controlfield, "tag")
+  nodes_datafield <- xml_find_all(doc, ".//d1:record/d1:datafield")
+  nodenum_datafield <- xml_attr(nodes_datafield, "tag")
+  nodes_subfield <- xml_find_all(doc, ".//d1:record/d1:datafield/d1:subfield")
+  nodenum_subfield <- xml_attr(nodes_subfield, "code")
+  nodeslength<-xml_length(nodes)
+  nodeslength2<-xml_length(nodes_datafield)
+  nodenames<-xml_name(xml_children(nodes))
+  nodenames_datafield<-xml_name(xml_children(nodes_datafield))
+  nodevalues<-trimws(xml_text(xml_children(nodes)))
+  nodevalues2<-trimws(xml_text(xml_children(nodes_datafield)))
+  nodenum_controlfield <- data.frame(nodenum = nodenum_controlfield) %>% 
+    mutate(nodenames = paste("controlfield",seq(1:n()),sep = ""),
+           nodenum = as.character(nodenum))
+  nodenum_datafield <- data.frame(nodenum = nodenum_datafield) %>% 
+    mutate(nodenames = paste("datafield",seq(1:n()),sep = ""),
+           nodenum = as.character(nodenum))
+  test <- data.frame(nodenames = nodenames) %>% 
+    bind_cols(nodevalues = nodevalues) %>% 
+    group_by(nodenames) %>% 
+    mutate(seq=1:n()) %>% 
+    ungroup() %>% 
+    unite("nodenames", c(nodenames,seq), sep = "") %>% 
+    left_join(bind_rows(nodenum_controlfield,nodenum_datafield),by="nodenames") %>% 
+    mutate(nodenum = ifelse(is.na(nodenum),"LDR",as.character(nodenum)))
+  test2 <- data.frame(nodeslength2) %>% 
+    mutate(nodenames = paste("datafield",seq(1:n()),sep = ""))
+  test <- test %>% 
+    left_join(test2,by="nodenames")
+  test <- test %>% 
+    mutate(nodeslength2 = ifelse(!is.na(nodeslength2),as.integer(nodeslength2),0))
+  y <- 1:nrow(test)
+  for (j in y) {
+    test$nodenames2[j] <- ifelse(test$nodeslength2[j]>0,paste("subfield",paste(replicate(test$nodeslength2[j],"|"),collapse = ""),sep = ""),NA)
+  }
+  deeper_nodes<- data.frame(nodenames = nodenames_datafield) %>% 
+    bind_cols(nodenums = nodenum_subfield) %>% 
+    bind_cols(nodevalue = nodevalues2) %>% 
+    mutate(seq=1:n()) %>% 
+    unite("nodenames", c(nodenames,seq), sep = "")
+  testowy <- test %>% 
+    cSplit("nodenames2",sep = "|",direction = "long") %>% 
+    mutate(nodenames = str_remove(nodenames,"\\d+$")) %>% 
+    group_by(nodenames) %>% 
+    mutate(nodenames2 = ifelse(nodenames=="datafield",paste("subfield",seq(1:n()),sep = ""),NA)) %>% 
+    ungroup() %>% 
+    left_join(deeper_nodes,by = c("nodenames2"="nodenames"))
+  testowy2 <- testowy %>% 
+    mutate(content = ifelse(!is.na(nodevalue),paste("$",as.character(nodenums),as.character(nodevalue),sep = ""),as.character(nodevalues))) %>%
+    mutate(record_group = ifelse(nodenum=="LDR",seq(1:n()),NA)) %>%
+    fill(record_group) %>%
+    mutate(id = ifelse(nodenum=="001",as.character(content),NA)) %>%
+    group_by(record_group) %>%
+    fill(id,.direction = "downup") %>%
+    ungroup() %>%
+    select(id,field=nodenum,content) %>% 
+    mutate(id_field = paste(id,field,sep = "|"))
+  if (nrow(testowy2)>0) {
+    count <- testowy2 %>%
+      select(4,3)
+    count <- as.data.frame(table(count$id_field))
+    data1 <- testowy2 %>%
+      left_join(count %>% mutate(Var1 = as.character(Var1)),by=c("id_field"="Var1"))
+    data1_to_join <- data1 %>%
+      filter(Freq > 1) %>%
+      group_by(id_field) %>%
+      mutate(content = paste(content, collapse="|")) %>%
+      ungroup() %>%
+      unique() %>%
+      mutate(id = str_replace_all(id_field,"(.*)(\\|)(.*)", "\\1"),
+             field = str_replace_all(id_field,"(.*)(\\|)(.*)", "\\3")) %>%
+      select(-Freq)
+    data1 <- data1 %>%
+      filter(id_field %notin% data1_to_join$id_field) %>%
+      bind_rows(.,data1_to_join) %>%
+      arrange(id_field,field) %>%
+      select(1,2,3)
+    remove(data1_to_join)
+    czas_kultury <- czas_kultury %>%
+      bind_rows(.,data1)
+  } 
+  nodes_np <- xml_find_first(doc, "//nextPage")
+  url <- trimws(xml_text(nodes_np))
+}
+testowo <- czas_kultury %>% 
+  select(id) %>% 
+  unique()
+#dodatkowe dwie strony ręcznie
+#http://data.bn.org.pl/api/bibs.marcxml?limit=100&amp;marc=650a+Czas+Kultury+%28czasop.%29
+#http://data.bn.org.pl/api/bibs.marcxml?limit=100&amp;marc=630a+Czas+Kultury+%28czasop.%29
+
+
+czas_kultury_wide <- dcast(czas_kultury, id ~ field, value.var="content", fun.aggregate = f.agg) %>% 
+  unique()
+
+write.xlsx(czas_kultury_wide, "C:/Users/Cezary/Desktop/czas_kultury.xlsx")
+
+```
+
