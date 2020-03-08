@@ -2095,19 +2095,20 @@ write.csv2(series, "C:/Users/Cezary/Desktop/samizdat_kartoteka_serii.csv", row.n
 ```
 
 ```{r kartoteki po pracach dziewczyn}
-
+#osoby
 record_people <- rbind(bn_record_people,cz_record_people,cz_record_people_art,pbl_record_people_books,pbl_record_people_art) %>% 
    mutate(record_id = as.integer(record_id)) %>%
   left_join(bind_rows(marc_field_bnb_100,marc_field_bnb_700,marc_field_bnb_701) %>% select(-X100,-X700,-X701),c("record_id"="id","field")) %>% 
-  left_join(bind_rows(marc_field_czb_100,marc_field_czb_600,marc_field_czb_700,marc_field_cza_100,marc_field_cza_600,marc_field_cza_700) %>% select(-X100,-X600,-X700),c("record_id"="id","field"))
+  left_join(bind_rows(marc_field_czb_100,marc_field_czb_600,marc_field_czb_700,marc_field_cza_100,marc_field_cza_600,marc_field_cza_700) %>% select(-X100,-X600,-X700),c("record_id"="id","field")) %>% 
+  unite("total",`%1`:`$$q`,sep = " ", remove = FALSE, na.rm = TRUE)
 
+x <- 1:nrow(record_people)
+for (i in x) {
+  progress(match(i,x), max.value = length(x))
+  record_people$person_match[i] <- ifelse(grepl(record_people$name_form[i],record_people$total[i]),TRUE,FALSE)
+}
 
-ggg <- bind_rows(marc_field_bnb_100,marc_field_bnb_700,marc_field_bnb_701)
-
-
-
-
-kartoteka_osob <- sheets_read(ss = "1Y8Y_pfkuKiv5npL6QJAXWbDO6twIJqsK3ArvaokjFkU", sheet = "samizdat") %>% 
+kartoteka_osob <- sheets_read(ss = "1Y8Y_pfkuKiv5npL6QJAXWbDO6twIJqsK3ArvaokjFkU", sheet = "samizdat",col_types = "c") %>% 
   select(-test) %>% 
   mutate(name_form = str_remove(name_form,", NA")) %>% 
   cSplit(c("name_form","name_form_id","id_osoby"),sep = "|",direction = "long") %>% 
@@ -2120,61 +2121,13 @@ kartoteka_osob <- sheets_read(ss = "1Y8Y_pfkuKiv5npL6QJAXWbDO6twIJqsK3ArvaokjFkU
                                  ifelse(grepl("pblw",name_form_id_3),"wspoltworcy",as.character(name_form_id_4)))) %>% 
   unite("name_form_id",name_form_id_1:name_form_id_5,sep = "-")
 
-xxx <- bind_rows(marc_field_czb_100,marc_field_czb_600,marc_field_czb_700,marc_field_cza_100,marc_field_cza_600,marc_field_cza_700)
-
-test <- record_people %>% 
+nodegoat_people <- record_people %>% 
+  filter(person_match==TRUE) %>% 
   unique() %>% 
   left_join(kartoteka_osob %>% select(name_form_id,group_id),by="name_form_id") %>% 
   filter(!is.na(group_id)) %>% 
   mutate(name_form = str_remove(name_form,"(, NA)+"),
-         record_id = as.integer(record_id)) %>% 
-  left_join(bind_rows(marc_field_bnb_100,marc_field_bnb_700,marc_field_bnb_701) %>% select(-X100,-X700,-X701),c("record_id"="id","field")) %>% 
-  left_join(bind_rows(marc_field_czb_100,marc_field_czb_600,marc_field_czb_700,marc_field_cza_100,marc_field_cza_600,marc_field_cza_700) %>% select(-X100,-X600,-X700),c("record_id"="id","field"))
-
-x <- 1:nrow(test)
-for (i in x) {
-  progress(match(i,x), max.value = length(x))
-  test$person_match[i] <- ifelse(grepl(test$`$$a`[i],test$name_form[i]),TRUE,FALSE)
-}
-
-test <- test %>% 
-  filter(is.na(person_match)|person_match==TRUE) %>% 
-  select(-person_match)
-
-x <- 1:nrow(test)
-for (i in x) {
-  if (!is.na(test$subfield[i])) {
-    progress(match(i,x), max.value = length(x))
-    abc <- test[colnames(test)==test$subfield[i]]
-    test$person_match[i] <- ifelse(grepl(abc[i,],test$name_form[i]),TRUE,FALSE)
-  }
-}
-
-x <- 1:nrow(test)
-for (i in x) {
-  if (!is.na(test$`%2`[i])) {
-    progress(match(i,x), max.value = length(x))
-    test$person_match2[i] <- ifelse(grepl(paste3(test$`%1`[i],test$`%2`[i],sep = " "),test$name_form[i]),TRUE,FALSE)
-  }
-}
-
-test2 <- test %>% 
-  mutate(person_match2 = ifelse(subfield!="%1"&person_match==TRUE&person_match2==FALSE,TRUE,person_match2))
-
-dobre <- test2 %>% 
-  filter(!(is.na(`%2`)&is.na(person_match)&person_match2==TRUE)&!(person_match==TRUE&person_match2==FALSE)&!(person_match==FALSE&person_match2==FALSE)&!(person_match==FALSE&person_match2==TRUE))
-
-blabla <- test %>% 
-  filter(person_match==TRUE&person_match2==FALSE)
-
-
-test2 <- test %>% 
-  mutate(person_match2 = ifelse(subfield=="%1",person_match2,TRUE)) %>% 
-  filter(is.na(person_match)|person_match==TRUE,
-         is.na(person_match2)|person_match2==TRUE)
-
-test2 <- test %>%  
-  mutate(Project_ID = NA,
+         Project_ID = NA,
          LOD_ID = NA,
          Index_Name = ifelse(data_set=="bn_books",paste3(`%1`,`%2`,`%3`,`%4`,`%5`,`%6`,sep = " "),
                              ifelse(data_set %in% c("cz_books","cz_articles"),paste3(`$$a`),as.character(name_form))),
@@ -2195,18 +2148,16 @@ test2 <- test %>%
                              ifelse(data_set %in% c("cz_books","cz_articles"),str_extract(`$$d`,"\\d+(?=\\-)"),NA)),
          Death = ifelse(data_set=="bn_books",str_extract(`%d`,"(?<=\\-)\\d+"),
                              ifelse(data_set %in% c("cz_books","cz_articles"),str_extract(`$$d`,"(?=\\-)\\d+"),NA))) %>% 
-  select(id_osoby,group_id,Project_ID,LOD_ID,Index_Name,Name,Given_Name,Pseudonym_Kryptonym,True_Name,Other_Name_Form,Addition_to_Name,Numeration,Numeration_arabic,Birth,Death,name_form_id)
-
-test3 <- test2 %>% 
+  select(id_osoby,group_id,Project_ID,LOD_ID,Index_Name,Name,Given_Name,Pseudonym_Kryptonym,True_Name,Other_Name_Form,Addition_to_Name,Numeration,Numeration_arabic,Birth,Death,name_form_id) %>% 
   group_by(group_id) %>% 
   mutate(id_osoby = paste(unique(na.omit(id_osoby)),collapse = "|"),
          Project_ID = paste(unique(na.omit(Project_ID)),collapse = "|"),
          Index_Name = paste(unique(na.omit(Index_Name)),collapse = "|"),
          Name = paste(unique(na.omit(Name)),collapse = "|"),
          Given_Name = paste(unique(na.omit(Given_Name)),collapse = "|"),
-         Pseudonym_Kryptonym = paste(unique(na.omit(Pseudonym_Kryptonym)),collapse = "|"),
+         Pseudonym_Kryptonym = paste(unique(na.omit(Pseudonym_Kryptonym)),collapse = "; "),
          True_Name = paste(unique(na.omit(True_Name)),collapse = "|"),
-         Other_Name_Form = paste(unique(na.omit(Other_Name_Form)),collapse = "|"),
+         Other_Name_Form = paste(unique(na.omit(Other_Name_Form)),collapse = "; "),
          Addition_to_Name = paste(unique(na.omit(Addition_to_Name)),collapse = "|"),
          Numeration = paste(unique(na.omit(Numeration)),collapse = "|"),
          Birth = paste(unique(na.omit(Birth)),collapse = "|"),
@@ -2219,9 +2170,9 @@ test3 <- test2 %>%
          Index_Name = paste(unique(na.omit(Index_Name)),collapse = "|"),
          Name = paste(unique(na.omit(Name)),collapse = "|"),
          Given_Name = paste(unique(na.omit(Given_Name)),collapse = "|"),
-         Pseudonym_Kryptonym = paste(unique(na.omit(Pseudonym_Kryptonym)),collapse = "|"),
+         Pseudonym_Kryptonym = paste(unique(na.omit(Pseudonym_Kryptonym)),collapse = "; "),
          True_Name = paste(unique(na.omit(True_Name)),collapse = "|"),
-         Other_Name_Form = paste(unique(na.omit(Other_Name_Form)),collapse = "|"),
+         Other_Name_Form = paste(unique(na.omit(Other_Name_Form)),collapse = "; "),
          Addition_to_Name = paste(unique(na.omit(Addition_to_Name)),collapse = "|"),
          Numeration = paste(unique(na.omit(Numeration)),collapse = "|"),
          Birth = paste(unique(na.omit(Birth)),collapse = "|"),
@@ -2229,31 +2180,127 @@ test3 <- test2 %>%
          name_form_id = paste(unique(na.omit(name_form_id)),collapse = "|")) %>% 
   ungroup() %>% 
   arrange(id_osoby,group_id) %>% 
-  unique()
-  
-
-
-
-
-
-
-%>% 
-  group_by(LOD_ID) %>% 
-  mutate(Project_ID = paste(unique(na.omit(Project_ID)),collapse = "|"),
-         Index_Name = paste(unique(na.omit(Index_Name)),collapse = "|"),
+  unique() %>% 
+  mutate(Other_Name_Form = ifelse(grepl("\\|",Index_Name),paste3(Other_Name_Form,str_extract(Index_Name,"(?<=\\|)(.*)"),sep = "; "),paste3(Other_Name_Form)),
+         Name = ifelse(grepl("\\|",Name),str_extract(Name,"(.*?)(?=\\|)"),paste3(Name)),
+         Given_Name = ifelse(grepl("\\|",Given_Name),str_extract(Given_Name,"(.*?)(?=\\|)"),paste3(Given_Name)),
+         Birth = ifelse(grepl("\\|",Birth),str_extract(Birth,"(.*?)(?=\\|)"),paste3(Birth)),
+         Index_Name = ifelse(grepl("\\|",Index_Name),str_extract(Index_Name,"(.*?)(?=\\|)"),paste3(Index_Name))) %>% 
+  group_by_at(vars(c(Index_Name,Birth,Death))) %>% 
+  mutate(group_id = paste(unique(na.omit(group_id)),collapse = "|"),
+         Project_ID = paste(unique(na.omit(Project_ID)),collapse = "|"),
+         id_osoby = paste(unique(na.omit(id_osoby)),collapse = "|"),
          Name = paste(unique(na.omit(Name)),collapse = "|"),
          Given_Name = paste(unique(na.omit(Given_Name)),collapse = "|"),
-         Pseudonym_Kryptonym = paste(unique(na.omit(Pseudonym_Kryptonym)),collapse = "|"),
+         Pseudonym_Kryptonym = paste(unique(na.omit(Pseudonym_Kryptonym)),collapse = "; "),
          True_Name = paste(unique(na.omit(True_Name)),collapse = "|"),
-         Other_Name_Form = paste(unique(na.omit(Other_Name_Form)),collapse = "|"),
+         Other_Name_Form = paste(unique(na.omit(Other_Name_Form)),collapse = "; "),
          Addition_to_Name = paste(unique(na.omit(Addition_to_Name)),collapse = "|"),
          Numeration = paste(unique(na.omit(Numeration)),collapse = "|"),
-         Birth = paste(unique(na.omit(Birth)),collapse = "|"),
-         Death = paste(unique(na.omit(Death)),collapse = "|")) %>% 
-  ungroup()
+         name_form_id = paste(unique(na.omit(name_form_id)),collapse = "|")) %>% 
+  ungroup() %>% 
+  arrange(id_osoby,group_id) %>% 
+  unique() %>% 
+  mutate(Project_ID = 1:n())
+
 
 write.xlsx(nodegoat_people, "C:/Users/Cezary/Desktop/nodegoat_people.xlsx")
+write.csv2(nodegoat_people, file = "C:/Users/Cezary/Desktop/nodegoat_people.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
+#instytucje
+
+kartoteka_instytucji <- sheets_read(ss = "1MX8oqQly65GzkEhwKGf7NqBc4L4B5mNj12NtgLgB5Bs", sheet = "Arkusz1",col_types = "c")
+
+nodegoat_institutions <- kartoteka_instytucji %>% 
+  mutate(Entity_Name = ifelse(str_count(Entity_Name,"\\[")>str_count(Entity_Name,"\\]"),str_remove_all(Entity_Name,"^\\["),
+                               ifelse(str_count(Entity_Name,"\\[")<str_count(Entity_Name,"\\]"),str_remove_all(Entity_Name,"\\]$"),paste3(Entity_Name)))) %>% 
+  group_by(group_id) %>% 
+  mutate(Entity_Name = paste(unique(na.omit(Entity_Name)),collapse = "|"),
+         Related_Entity_Sub_Entity = paste(unique(na.omit(Related_Entity_Sub_Entity)),collapse = "|"),
+         Related_Entity_Main_Entity = paste(unique(na.omit(Related_Entity_Main_Entity)),collapse = "|"),
+         Located_Location = paste(unique(na.omit(Located_Location)),collapse = "|"),
+         group = paste(unique(na.omit(group)),collapse = "|")) %>% 
+  ungroup() %>% 
+  unique() %>% 
+  group_by_at(vars(c(Entity_Name,Related_Entity_Sub_Entity,Related_Entity_Main_Entity,Located_Location))) %>% 
+  mutate(group_id = paste(unique(na.omit(group_id)),collapse = "|"),
+         group = paste(unique(na.omit(group)),collapse = "|")) %>% 
+  ungroup() %>% 
+  unique() %>% 
+  arrange(Entity_Name,-nchar(Located_Location)) %>% 
+  mutate(Project_ID = 1:n(),
+         LOD_ID = NA)
+
+write.csv2(nodegoat_institutions, file = "C:/Users/Cezary/Desktop/nodegoat_institutions.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+
+#wydarzenia
+
+kartoteka_wydarzen <- sheets_read(ss = "1BosLyDVa7uxNTxw3Lt19PPADx8ZZcEuLYDnl--6vVDM", sheet = "Arkusz1",col_types = "c")
+
+kartoteka_wydarzen[is.na(kartoteka_wydarzen)]<-""
+
+nodegoat_events <- kartoteka_wydarzen %>% 
+  mutate(Event_Number_Arabic = str_extract(Event_Number_Arabic,"\\d+"),
+         Event_Year = str_extract(Event_Year,"\\d+"),
+         Located = str_remove_all(Located,"^\\(|\\)$")) %>% 
+  left_join(nodegoat_institutions %>% select(Project_ID_institution=Project_ID,Entity_Name,Related_Entity_Sub_Entity) %>% cSplit(.,"Entity_Name",sep = "|",direction = "long"),by = c("Organiser_Main"="Entity_Name","Organiser_Sub"="Related_Entity_Sub_Entity"))
+
+nodegoat_events[nodegoat_events==""]<-NA
+
+nodegoat_events <- nodegoat_events%>% 
+  arrange(as.integer(group_id),Event_Name)
+
+nodegoat_events <- nodegoat_events[!duplicated(nodegoat_events$group_id),] %>% 
+  left_join(nodegoat_institutions %>% select(Project_ID_institution2=Project_ID,Entity_Name,Related_Entity_Main_Entity),by = c("Organiser_Main"="Related_Entity_Main_Entity","Organiser_Sub"="Entity_Name")) %>% 
+  mutate(Organiser_Main = ifelse(Organiser_Main=="","",paste3(Project_ID_institution)),
+         Organiser_Sub = ifelse(Organiser_Sub=="","",paste3(Project_ID_institution2))) %>% 
+  group_by(group_id) %>% 
+  mutate(Event_Name = paste(unique(na.omit(Event_Name)),collapse = "|"),
+         Event_Other_Names = paste(unique(na.omit(Event_Other_Names)),collapse = "|"),
+         Event_Number = paste(unique(na.omit(Event_Number)),collapse = "|"),
+         Event_Number_Arabic = paste(unique(na.omit(Event_Number_Arabic)),collapse = "|"),
+         Event_Year = paste(unique(na.omit(Event_Year)),collapse = "|"),
+         Located = paste(unique(na.omit(Located)),collapse = "|"),
+         Organiser_Main = paste(unique(na.omit(Organiser_Main)),collapse = "|"),
+         Organiser_Sub = paste(unique(na.omit(Organiser_Sub)),collapse = "|"),
+         group = paste(unique(na.omit(group)),collapse = "|")) %>% 
+  ungroup() %>% 
+  unique() %>% 
+  mutate(Project_ID = 1:n()) %>% 
+  select(group_id:group,Project_ID)
+
+write.csv2(nodegoat_events, file = "C:/Users/Cezary/Desktop/nodegoat_events.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+
+#serie
+
+kartoteka_serii <- sheets_read(ss = "1UPBWh8743mJWVGFD1fg3CHx03eOH8lSWcX090QIFJgs", sheet = "Arkusz1",col_types = "c")
+
+nodegoat_series <- kartoteka_serii %>% 
+  mutate(Series_Title = ifelse(str_count(Series_Title,"\\[")>str_count(Series_Title,"\\]"),str_remove_all(Series_Title,"^\\["),
+                               ifelse(str_count(Series_Title,"\\[")<str_count(Series_Title,"\\]"),str_remove_all(Series_Title,"\\]$"),paste3(Series_Title))),
+         Creator = ifelse(str_count(Creator,"\\[")>str_count(Creator,"\\]"),str_remove_all(Creator,"^\\["),
+                               ifelse(str_count(Creator,"\\[")<str_count(Creator,"\\]"),str_remove_all(Creator,"\\]$"),paste3(Creator)))) %>% 
+  mutate(nr_zapisu = str_extract(group,"\\d+(?!.*\\d+)")) %>% 
+  left_join(bn_books %>% select(id,X210) %>% mutate(id=as.character(id)),by = c("nr_zapisu"="id")) %>% 
+  mutate(X210 = str_remove_all(str_extract(X210,"(?<=%a)(.*?)(?= %)"),"^\\[|\\]$")) %>% 
+  left_join(nodegoat_institutions %>% select(Project_ID_institution=Project_ID,Entity_Name,Located_Location) %>% cSplit(.,"Entity_Name",sep = "|",direction = "long"),by = c("Creator"="Entity_Name","X210"="Located_Location")) %>%  
+  left_join(nodegoat_institutions %>% select(Project_ID_institution2=Project_ID,Entity_Name) %>% cSplit(.,"Entity_Name",sep = "|",direction = "long"),by = c("Creator"="Entity_Name")) %>% 
+  mutate(Project_ID_institution = ifelse(!is.na(Project_ID_institution),paste3(Project_ID_institution),
+                                         ifelse(is.na(Project_ID_institution)&!is.na(Project_ID_institution2),paste3(Project_ID_institution2),NA))) %>% 
+  mutate(Creator = ifelse(is.na(Creator),NA,paste3(Project_ID_institution))) %>% 
+  select(-X210,-Project_ID_institution2,-nr_zapisu,-Project_ID_institution) %>% 
+  group_by(group_id) %>% 
+  mutate(Series_Title = paste(unique(na.omit(Series_Title)),collapse = "|"),
+         Addition_to_Title = paste(unique(na.omit(Addition_to_Title)),collapse = "|"),
+         Creator = str_replace(paste(unique(na.omit(Creator)),collapse = "|"),"(^.*?)(\\|.*$)","\\1"),
+         Sub_Series = paste(unique(na.omit(Sub_Series)),collapse = "|"),
+         Main_Series = paste(unique(na.omit(Main_Series)),collapse = "|"),
+         group = paste(unique(na.omit(group)),collapse = "|")) %>% 
+  ungroup() %>% 
+  unique() %>% 
+  mutate(Project_ID = 1:n())
+  
+write.csv2(nodegoat_series, file = "C:/Users/Cezary/Desktop/nodegoat_series.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 ```
 
