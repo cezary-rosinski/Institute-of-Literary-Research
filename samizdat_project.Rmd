@@ -2230,6 +2230,13 @@ nodegoat_institutions <- kartoteka_instytucji %>%
   arrange(Entity_Name,-nchar(Located_Location)) %>% 
   mutate(Project_ID = 1:n(),
          LOD_ID = NA)
+nodegoat_institutions <- nodegoat_institutions %>% 
+  left_join(nodegoat_institutions %>% select(Project_ID_sub=Project_ID,Entity_Name,Related_Entity_Main_Entity),by = c("Related_Entity_Sub_Entity"="Entity_Name","Entity_Name"="Related_Entity_Main_Entity"))
+nodegoat_institutions <- nodegoat_institutions %>% 
+  left_join(nodegoat_institutions %>% select(Project_ID_main=Project_ID,Entity_Name,Related_Entity_Sub_Entity),by = c("Related_Entity_Main_Entity"="Entity_Name","Entity_Name"="Related_Entity_Sub_Entity")) %>% 
+  mutate(Related_Entity_Sub_Entity = ifelse(Related_Entity_Sub_Entity!="",as.integer(Project_ID_sub),""),
+         Related_Entity_Main_Entity = ifelse(Related_Entity_Main_Entity!="",as.integer(Project_ID_main),"")) %>% 
+  select(group_id:LOD_ID)
 
 write.csv2(nodegoat_institutions, file = "C:/Users/Cezary/Desktop/nodegoat_institutions.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 

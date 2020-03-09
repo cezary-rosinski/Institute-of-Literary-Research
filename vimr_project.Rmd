@@ -84,30 +84,90 @@ for (i in x) {
   marc_field_100[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_100$X100),str_replace_all(gsub(string,"\\3",marc_field_100$X100),"\\${2}.", "~"),NA)
 }
 
+#dropped
+# dropped <- marc_field_100 %>% 
+#   filter(is.na(`$$7`))
+# 
+# write.xlsx(dropped, "C:/Users/Cezary/Desktop/dropped.xlsx")
+# 
+# dates <- marc_field_100 %>% 
+#   filter(!is.na(`$$d`))
+
 #extracting all local id from VIAF
 marc_field_100 <- marc_field_100 %>% 
-  filter(!is.na(`$$7`))#,
-         #grepl("\\d+",`$$7`))
+  filter(!is.na(`$$7`)|!is.na(`$$d`))
+
 rD <- rsDriver(port=4444L,browser="chrome", chromever="79.0.3945.36")
 remDr <- rD$client
 
-x <- 10454:nrow(marc_field_100)
+x <- 1:nrow(marc_field_100)
 cz_viaf_ids <- data.frame(stringsAsFactors = FALSE)
 for (i in x) {
   progress(match(i,x), max.value = length(x))
-  url <- paste("http://viaf.org/viaf/sourceID/NKC%7C",marc_field_100$`$$7`[i],sep = "")
+  if (!is.na(marc_field_100$`$$7`[i])) {
+    url <- paste("http://viaf.org/viaf/sourceID/NKC%7C",marc_field_100$`$$7`[i],sep = "")
   remDr$navigate(url)
   viaf_id <- str_replace(as.character(remDr$getCurrentUrl()),"https","http")
   xml <- xmlParse(paste(viaf_id,"viaf.xml",sep = ""))
   tryCatch({
-    IDs <- setNames(xmlToDataFrame(nodes = getNodeSet(xml, "//ns1:VIAFCluster/ns1:mainHeadings/ns1:data/ns1:sources/ns1:sid")),"Identyfikatory")
+    IDs <- setNames(xmlToDataFrame(nodes = getNodeSet(xml, "//ns1:VIAFCluster/ns1:mainHeadings/ns1:data/ns1:sources/ns1:sid")),"IDs")
     IDs <- paste(unlist(IDs), collapse = "~")
     }, error=function(e){
       IDs <<- "Brak danych (CR)"
       })
-  iteration <- cbind(cz_name=marc_field_100$`$$a`[i],viaf_id,IDs)
+  tryCatch({
+  nationality <- setNames(xmlToDataFrame(nodes = getNodeSet(xml, "//ns1:VIAFCluster/ns1:nationalityOfEntity/ns1:data/ns1:text")),"Nationality")
+  nationality <- paste(unlist(nationality), collapse = "~")
+  }, error=function(e){
+    nationality <<- "Brak danych (CR)"
+    })
+  tryCatch({
+  language <- setNames(xmlToDataFrame(nodes = getNodeSet(xml, "//ns1:VIAFCluster/ns1:languageOfEntity/ns1:data/ns1:text")),"Language")
+  language <- paste(unlist(language), collapse = "~")
+  }, error=function(e){
+    language <<- "Brak danych (CR)"
+    })
+  iteration <- cbind(cz_name=marc_field_100$`$$a`[i],viaf_id,IDs,nationality,language)
   cz_viaf_ids <- rbind(cz_viaf_ids,iteration)
+    
+  } else {
+    url <- paste("http://viaf.org/viaf/search?query=local.personalNames%20all%20%22",str_replace_all(paste(marc_field_100$`$$a`[i],marc_field_100$`$$d`[i],sep = " ")," ","%20"),"%22%20and%20local.sources%20any%20%22nkc%22&sortKeys=holdingscount&recordSchema=BriefVIAF",sep = "")
+    remDr$navigate(url)
+    tryCatch({
+    enter <- remDr$findElement(using = 'css selector', "div.inner table:nth-child(2) tbody:nth-child(1) tr:nth-child(2) td.recName > a:nth-child(1)")
+    enter$clickElement()
+    viaf_id <- str_remove(str_replace(as.character(remDr$getCurrentUrl()),"https","http"),"\\#.*$")
+  xml <- xmlParse(paste(viaf_id,"viaf.xml",sep = ""))
+  tryCatch({
+    IDs <- setNames(xmlToDataFrame(nodes = getNodeSet(xml, "//ns1:VIAFCluster/ns1:mainHeadings/ns1:data/ns1:sources/ns1:sid")),"IDs")
+    IDs <- paste(unlist(IDs), collapse = "~")
+    }, error=function(e){
+      IDs <<- "Brak danych (CR)"
+      })
+  tryCatch({
+  nationality <- setNames(xmlToDataFrame(nodes = getNodeSet(xml, "//ns1:VIAFCluster/ns1:nationalityOfEntity/ns1:data/ns1:text")),"Nationality")
+  nationality <- paste(unlist(nationality), collapse = "~")
+  }, error=function(e){
+    nationality <<- "Brak danych (CR)"
+    })
+  tryCatch({
+  language <- setNames(xmlToDataFrame(nodes = getNodeSet(xml, "//ns1:VIAFCluster/ns1:languageOfEntity/ns1:data/ns1:text")),"Language")
+  language <- paste(unlist(language), collapse = "~")
+  }, error=function(e){
+    language <<- "Brak danych (CR)"
+    })
+    
+    }, error=function(e){
+      viaf_id <<- "Brak danych (CR)"
+      IDs <<- "Brak danych (CR)"
+      nationality <<- "Brak danych (CR)"
+      language <<- "Brak danych (CR)"
+    })
+      iteration <- cbind(cz_name=marc_field_100$`$$a`[i],viaf_id,IDs,nationality,language)
+      cz_viaf_ids <- rbind(cz_viaf_ids,iteration)
+  }
 }
+
 
 cz_viaf_ids_long <- cz_viaf_ids %>% 
   cSplit("IDs",sep = "~",direction = "long")
@@ -166,7 +226,7 @@ x <- 1:nrow(swedish_data)
 data_full <- data.frame(stringsAsFactors = FALSE)
 for (i in x) {
   progress(match(i,x), max.value = length(x))
-  url <- paste("http://libris.kb.se/xsearch?query=forf:(",str_replace_all(swedish_data$name[i]," ","%20"),")&start=1&n=200&format=marcxml",sep = "")
+  url <- paste("http://libris.kb.se/xsearch?query=forf:(",str_replace_all(swedish_data$name[i]," ","%20"),")&start=1&n=200&format=marcxml&format_level=full",sep = "")
   
   tryCatch({
 
@@ -180,7 +240,7 @@ for (i in x) {
   b <- split(b, ceiling(seq_along(b)/200))
   b <- as.integer(lapply(b, `[[`, 1))
 for (a in b) {
-  url <- paste("http://libris.kb.se/xsearch?query=forf:(",str_replace_all(swedish_data$name[i]," ","%20"),")&start=",a,"&n=200&format=marcxml",sep = "")
+  url <- paste("http://libris.kb.se/xsearch?query=forf:(",str_replace_all(swedish_data$name[i]," ","%20"),")&start=",a,"&n=200&format=marcxml&format_level=full",sep = "")
   
   nodes <- xml_find_all(doc, ".//marc:record")
   nodes_controlfield <- xml_find_all(doc, ".//marc:record/marc:controlfield")
