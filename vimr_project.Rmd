@@ -100,8 +100,9 @@ marc_field_100 <- marc_field_100 %>%
 rD <- rsDriver(port=4444L,browser="chrome", chromever="79.0.3945.36")
 remDr <- rD$client
 
-x <- 1:nrow(marc_field_100)
 cz_viaf_ids <- data.frame(stringsAsFactors = FALSE)
+x <- 13968:nrow(marc_field_100)
+
 for (i in x) {
   progress(match(i,x), max.value = length(x))
   if (!is.na(marc_field_100$`$$7`[i])) {
@@ -168,6 +169,7 @@ for (i in x) {
   }
 }
 
+#write.xlsx(cz_viaf_ids, "C:/Users/Cezary/Desktop/cz_viaf_ids.xlsx")
 
 cz_viaf_ids_long <- cz_viaf_ids %>% 
   cSplit("IDs",sep = "~",direction = "long")
@@ -356,8 +358,6 @@ dobre <- data_full_wide %>%
   mutate(viaf = str_replace(viaf,"(^.*\\|)(.*?$)","\\2")) %>% 
   unique()
 write.xlsx(dobre, "C:/Users/Cezary/Desktop/dobre_szwedzkie.xlsx")
-
-
 
 ```
 
