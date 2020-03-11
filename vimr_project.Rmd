@@ -217,6 +217,14 @@ for (i in x) {
 #write.xlsx(full_data_pl_swe, "C:/Users/Cezary/Desktop/full_data_pl_swe.xlsx")
 ```
 
+```{r}
+test <- cz_viaf_ids %>% 
+  left_join(marc_field_100 %>% select(X001,`$$a`,`$$d`), by = c("cz_name"="$$a")) %>% 
+  left_join(data_table %>% select(X001,X370), by = "X001")
+write.xlsx(test, "C:/Users/Cezary/Desktop/test.xlsx")
+```
+
+
 ```{r Swedish}
 swedish_data <- full_data_pl_swe %>% 
   filter(in_swedish==T) %>% 
@@ -360,5 +368,53 @@ dobre <- data_full_wide %>%
 write.xlsx(dobre, "C:/Users/Cezary/Desktop/dobre_szwedzkie.xlsx")
 
 ```
+
+```{r cz oai-pmh}
+
+install.packages("OAIHarvester")
+library(OAIHarvester)
+baseurl <- "https://aleph.nkp.cz/OAI"
+x <- oaih_identify(baseurl)
+rbind(x, deparse.level = 0)
+sapply(x$description, xml_name)
+oaih_transform(x$description[[1L]])
+oaih_list_metadata_formats(baseurl)
+sets <- oaih_list_sets(baseurl)
+rbind(head(sets,3L),tail(sets,3L))
+spec <- unlist(sets[sets[,"setName"]=="Type = Thesis","setSpec"])
+
+abc <- oaih_harvest(baseurl = baseurl,from = "2020-02-28")
+
+oaih_size(baseurl)
+oaih_list_identifiers(baseurl = baseurl, prefix = "marc21", from = "2020-02-28",
+until = NULL, set = "NKC", transform = TRUE)
+
+
+
+doc <- OAIHarvester::oaih_get_record(baseurl = baseurl,identifier = "oai:aleph-nkp.cz:NKC01-003165865",prefix = "marc21",transform = FALSE)
+
+write_xml(doc,"C:/Users/Cezary/Desktop/xml.xml",encoding = "Windows-1250")
+
+
+
+xml2::xml_ns(test)
+test2 <- xmlToDataFrame(getNodeSet(xmlParse(test),"//marc:record"))
+
+nodes <- xml_find_all(doc, ".//marc:record")
+  nodes_controlfield <- xml_find_all(doc, ".//marc:record/marc:controlfield")
+  nodenum_controlfield <- xml_attr(nodes_controlfield, "tag")
+  nodes_datafield <- xml_find_all(doc, ".//marc:record/marc:datafield")
+  nodenum_datafield <- xml_attr(nodes_datafield, "tag")
+  nodes_subfield <- xml_find_all(doc, ".//marc:record/marc:datafield/marc:subfield")
+  nodenum_subfield <- xml_attr(nodes_subfield, "code")
+  nodeslength<-xml_length(nodes)
+  nodeslength2<-xml_length(nodes_datafield)
+  nodenames<-xml_name(xml_children(nodes))
+  nodenames_datafield<-xml_name(xml_children(nodes_datafield))
+  nodevalues<-trimws(xml_text(xml_children(nodes)))
+  nodevalues2<-trimws(xml_text(xml_children(nodes_datafield)))
+  nodenum_controlfield <- data.frame(nodenum = nodenum_controlfield)
+```
+
 
 
