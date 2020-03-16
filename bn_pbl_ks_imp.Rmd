@@ -6799,7 +6799,8 @@ wsp_info <- wsp_info %>%
   arrange(za_uwagi2,-same)
 
 za_opis_ks <- za_opis_ks %>% 
-  bind_cols(wsp_info %>% select(wsp))
+  bind_cols(wsp_info %>% select(wsp)) %>% 
+  unite("za_opis_ks",za_opis_ks:wsp,remove = TRUE,sep = " ")
 
 #12: seria wydawnicza
 marc_field_490 <- data %>%
