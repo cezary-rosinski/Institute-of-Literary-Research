@@ -16,12 +16,12 @@ options(scipen = 999)
 pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,arrangements,tokenizers,openxlsx,jsonlite)
 `%notin%` <- Negate(`%in%`)
 #połączenie z bazą PBL
-jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Nikodem/Downloads/ojdbc6.jar")
+jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Cezary/Downloads/ojdbc6.jar")
 PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "IBL_SELECT", "CR333444")
 
 #wgranie zbiorów książek
 #aktualizacja - wprowadź właściwą ścieżkę pliku (zmień rok)
-bn_ks <- read.csv2("C:/Users/Nikodem/Downloads/bn_ks_2012.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
+bn_ks <- read.csv2("C:/Users/Cezary/Downloads/bn_ks_2012.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
   mutate(rok = str_sub(X008,8,11)) %>% 
   #aktualizacja - wprowadź do filtra właściwy rok
   filter(rok == 2012,
@@ -134,22 +134,35 @@ pbl_viaf <- rbind(pbl_viaf,pbl_viaf2, pbl_viaf3) %>%
 remove(pbl_viaf2)
 remove(pbl_viaf3)
 
-#zostawić do testowania, czy jedno hasło bn nie zasila kilku haseł twórców pbl
-#pbl_viaf <- sheets_read(ss = "1cEz73dGN2r2-TTc702yne9tKfH9PQ6UyAJ2zBSV6Jb0") %>%
+#bezpiecznik!
+#sprawdź, czy jedno hasło bn nie zasila kilku haseł twórców pbl
+
+# pbl_viaf_test1 <- sheets_read(ss = "1cEz73dGN2r2-TTc702yne9tKfH9PQ6UyAJ2zBSV6Jb0") %>%
 #  filter(czy_ten_sam!="nie") %>%
 #  select(pbl_id, BN_id, BN_name)
-#pbl_viaf2 <- sheets_read(ss = "1_Bhwzo0xu4yTn8tF0ZNAZq9iIAqIxfcrjeLVCm_mggM") %>%
+# pbl_viaf_test2 <- sheets_read(ss = "1_Bhwzo0xu4yTn8tF0ZNAZq9iIAqIxfcrjeLVCm_mggM") %>%
 #  filter(czy_ten_sam!="nie") %>%
 #  select(pbl_id, BN_id, BN_name)
-#pbl_viaf <- rbind(pbl_viaf,pbl_viaf2) %>%
+# pbl_viaf_test3 <- sheets_read(ss = "1L-7Zv9EyLr5FeCIY_s90rT5Hz6DjAScCx6NxfuHvoEQ") %>%
+#   filter(czy_ten_sam!="nie") %>%
+#   select(pbl_id, BN_id, BN_name)
+# pbl_viaf_test <- rbind(pbl_viaf_test1,pbl_viaf_test2,pbl_viaf_test3) %>%
 #  arrange(pbl_id) %>%
 #  unique()
-#
-#count <- as.data.frame(table(pbl_viaf$BN_id))
-#pbl_viaf <- merge(pbl_viaf,count,by.x = "BN_id",by.y = "Var1",all.x = TRUE)
-#pbl_viaf <- pbl_viaf %>%
+# 
+# count <- as.data.frame(table(pbl_viaf_test$BN_id))
+# pbl_viaf_test_1 <- merge(pbl_viaf_test,count,by.x = "BN_id",by.y = "Var1",all.x = TRUE) %>%
 #  unique()
-#count2 <- as.data.frame(table(pbl_viaf$pbl_id))
+
+#bezpiecznik!
+#w obiekcie pbl_viaf_test_1 przy frekwencji większej niż 1 należy przeanalizować grupy, jeśli do tego samego identyfikatora pbl przypisane sa różne identyfikatory bn, które jednak opisują tę samą osobę, to wszystko jest okej; w przeciwnym razie trzeba przeprowadzić korektę w plikach "mapowanie_osob_bn_pbl"
+
+# count2 <- as.data.frame(table(pbl_viaf_test$pbl_id))
+# pbl_viaf_test_2 <- merge(pbl_viaf_test,count2,by.x = "pbl_id",by.y = "Var1",all.x = TRUE) %>%
+#  unique()
+
+#bezpiecznik!
+#dla grupy o frekwencji większej niż 1 sprawdź, czy w zestawie identyfikatorów bn nie ma rażących błędów; w przeciwnym razie trzeba przeprowadzić korektę w plikach "mapowanie_osob_bn_pbl"
 
 #utożsamianie po nazewnictwie z informacją o dziale
 tworca_i_dzial <- dbGetQuery(PBL,
@@ -919,7 +932,7 @@ bn_ok <- bn_ok %>%
 
 ###czy i jak automatyzować przedmiotową?
 
-#write.csv2(bn_ok, "C:/Users/Nikodem/Desktop/bn_ok_2009.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+#write.csv2(bn_ok, "C:/Users/Cezary/Desktop/bn_ok_2009.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 chunk6 <- bn_ok
 ```
 
@@ -952,7 +965,7 @@ na_pozniej <- bn_ok %>%
 #          lata_temat = ifelse(grepl("\\d{2}-",X600),str_replace(X600,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA)) %>%
 # filter((is.na(lata)&is.na(lata_temat))|!(as.integer(lata)<1800)|!(as.integer(lata_temat)<1800))
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(na_pozniej, "C:/Users/Nikodem/Desktop/bn_2012_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(na_pozniej, "C:/Users/Cezary/Desktop/bn_2012_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 bn_ok <- sqldf("select *
                from bn_ok a
@@ -1343,7 +1356,7 @@ PBL_literatury_obce <- PBL_dzialy_path %>%
   mutate(nazwa = substr(str_replace(DZ_NAZWA, "(.*?)( )(.*?)","\\3"),1,nchar(str_replace(DZ_NAZWA, "(.*?)( )(.*?)","\\3"))-1),
          nazwa = ifelse(nazwa=="romska (cygańska","romsk|cygańsk",as.character(nazwa)))
 
-reczne <- data.frame(DZ_DZIAL_ID = c(32,32,32,32,59,86,107,149,67,69,34,34,34,34,34,55,32,99,34),DZ_NAZWA = c("Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura grecka starożytna","Literatura łacińska średniowieczna","Literatura syryjska","Literatura esperanto","Literatura holenderska","Literatury Indii","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej", "Literatura egipsko-arabska", "Literatura brytyjska i irlandzka","Literatura palestyńsko-arabska","Literatury Afryki Subsaharyjskiej"), redaktor_dzialu = c("BEATAK","BEATAK","BEATAK","BEATAK","BEATAS","BEATAS","BEATAD","Cezary","TOMASZU","EWA","EWA","EWA","EWA","EWA","EWA","BEATAD","BEATAK","BEATAD","EWA"), nazwa = c("angielsk","szkock","irlandzk","walijsk","greck","łacińsk","syryjsk","esperanck","niderlandzk","indyjsk","południowoafryka","senegalsk","nigeryjsk","afrykańsk","ruandyjsk","egipsk. nowożytn","celtyck","palestyńsk","somalijsk"))
+reczne <- data.frame(DZ_DZIAL_ID = c(32,32,32,32,59,86,107,149,67,69,34,34,34,34,34,55,32,99,34),DZ_NAZWA = c("Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura brytyjska i irlandzka","Literatura grecka starożytna","Literatura łacińska średniowieczna","Literatura syryjska","Literatura esperanto","Literatura holenderska","Literatury Indii","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej","Literatury Afryki Subsaharyjskiej", "Literatura egipsko-arabska", "Literatura brytyjska i irlandzka","Literatura palestyńsko-arabska","Literatury Afryki Subsaharyjskiej"), redaktor_dzialu = c("BEATAK","BEATAK","BEATAK","BEATAK","BEATAS","BEATAS","BEATAD","CEZARY","TOMASZU","EWA","EWA","EWA","EWA","EWA","EWA","BEATAD","BEATAK","BEATAD","EWA"), nazwa = c("angielsk","szkock","irlandzk","walijsk","greck","łacińsk","syryjsk","esperanck","niderlandzk","indyjsk","południowoafryka","senegalsk","nigeryjsk","afrykańsk","ruandyjsk","egipsk. nowożytn","celtyck","palestyńsk","somalijsk"))
 
 PBL_literatury_obce <- rbind(PBL_literatury_obce,reczne)
 
@@ -3785,7 +3798,7 @@ automatyczny_IOK <- polaczone %>%
   filter(rekord_BN %notin% data$ZA_UWAGI[data$czy_automatycznie=="nie"]) %>%
   mutate(powinno_byc = "IOK")
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(automatyczny_IOK, "C:/Users/Nikodem/Desktop/imp_2012_automatyczne_podmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(automatyczny_IOK, "C:/Users/Cezary/Desktop/imp_2012_automatyczne_podmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 out <- cSplit(polaczone, c("am_autor_id", "am_nazwisko", "am_imie","os_osoba_id","os_nazwisko", "os_imie", "fo_symbol","wy_wydawnictwo_id","wy_miejsce","wy_nazwa"),sep = "|",direction = "long") %>%
   unique()
@@ -3894,7 +3907,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2012_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2012_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -5000,7 +5013,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2012_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2012_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -6079,7 +6092,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2012_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2012_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -7046,7 +7059,7 @@ for (i in x) {
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Nikodem/Desktop/2012_wspolwydanie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2012_wspolwydanie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -7064,7 +7077,7 @@ Najpierw należy przeprowadzić import do bazy, a następnie egzekwować poniżs
 #automatyczny IOK dla rekordów bibliograficznych
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
 
-nadpisanie_zapisow_IOK <- read.csv2("C:/Users/Nikodem/Desktop/imp_2012_automatyczne_podmiotowe.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE)
+nadpisanie_zapisow_IOK <- read.csv2("C:/Users/Cezary/Desktop/imp_2012_automatyczne_podmiotowe.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE)
 
 #aktualizacja - wpisać w selekcie dla za_uwagi właściwą frazę dla rocznika, np. 'BN: 2009%'
 nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
@@ -7078,7 +7091,7 @@ nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
   mutate(ID2 = NA) %>% 
   select(ZA_ZAPIS_ID,ID2,jest,powinno_byc)
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Nikodem/Desktop/2012_nadpisanie_zapisow_IOK.xlsx",sheetName = "ZA_STATUS_IMP")
+write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Cezary/Desktop/2012_nadpisanie_zapisow_IOK.xlsx",sheetName = "ZA_STATUS_IMP")
 
 #bezpiecznik
 #automatyczny IOK dla nowych twórców w kartotece powinien zostać przeprowadzony z poziomu importera
@@ -7107,7 +7120,7 @@ rocznik_pbl_po_imporcie <- dbGetQuery(PBL,
   select(noquote(kolejnosc))
 rocznik_pbl_po_imporcie$pracownik[rocznik_pbl_po_imporcie$status=="IOK"] <- "AUTOMAT"
 #aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Nikodem/Desktop/ks_BN_2012_listy_pracowników.xlsx",sheetName = "lista_ksiazek")
+write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Cezary/Desktop/ks_BN_2012_listy_pracowników.xlsx",sheetName = "lista_ksiazek")
 #utwórz nowy podfolder w folderze importu BN i prześlij listę na dysk, przygotuj widoki filtrów dla wszystkich osób i roześlij unikatowe linki
 ```
 
@@ -7209,7 +7222,7 @@ pbl_bn_viaf_import <- pbl_bn_viaf_import %>%
   unique()
 
 #zapisać plik i jego treść wkleić na dysk do tabeli "mapowanie_osob_bn_pbl_po_imporcie"
-write.xlsx(pbl_bn_viaf_import, "C:/Users/Nikodem/Desktop/relacje_osobowe_pbl_bn.xlsx",sheetName = "pbl-bn")
+write.xlsx(pbl_bn_viaf_import, "C:/Users/Cezary/Desktop/relacje_osobowe_pbl_bn.xlsx",sheetName = "pbl-bn")
 #następnie przeanalizować zawartość wkejonej części i zostawić "tak" w kolumnie F tylko dla poprawnych utożsamień (osoba w PBL to osoba w BN)
 ```
 

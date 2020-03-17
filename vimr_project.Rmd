@@ -371,7 +371,7 @@ write.xlsx(dobre, "C:/Users/Cezary/Desktop/dobre_szwedzkie.xlsx")
 
 ```{r cz oai-pmh}
 
-install.packages("OAIHarvester")
+#install.packages("OAIHarvester")
 library(OAIHarvester)
 baseurl <- "https://aleph.nkp.cz/OAI"
 x <- oaih_identify(baseurl)
@@ -383,15 +383,33 @@ sets <- oaih_list_sets(baseurl)
 rbind(head(sets,3L),tail(sets,3L))
 spec <- unlist(sets[sets[,"setName"]=="Type = Thesis","setSpec"])
 
-abc <- oaih_harvest(baseurl = baseurl,from = "2020-02-28")
+abc <- oaih_harvest(baseurl = baseurl,from = "2020-03-10",set = "NKC",prefix = "marc21")
+
+#
+x <- 1:length(abc)
+for (i in x) {
+  progress(match(i,x), max.value = length(x)) 
+tryCatch({
+doc <- OAIHarvester::oaih_get_record(baseurl = baseurl,identifier = abc[[i]],prefix = "marc21")
+
+}, error=function(e){
+  doc <- list()
+})
+  if (length(doc)>0) {
+    write_xml(doc,paste("C:/Users/Cezary/Desktop/xml",i,".xml",sep = ""),encoding = "UTF-8")
+  }
+  
+}
+
+#
 
 oaih_size(baseurl)
-oaih_list_identifiers(baseurl = baseurl, prefix = "marc21", from = "2020-02-28",
+oaih_list_identifiers(baseurl = baseurl, prefix = "marc21", from = "2020-03-10",
 until = NULL, set = "NKC", transform = TRUE)
 
 
 
-doc <- OAIHarvester::oaih_get_record(baseurl = baseurl,identifier = "oai:aleph-nkp.cz:NKC01-003165865",prefix = "marc21",transform = FALSE)
+doc <- OAIHarvester::oaih_get_record(baseurl = baseurl,identifier = abc[[1]],prefix = "marc21_xml")
 
 write_xml(doc,"C:/Users/Cezary/Desktop/xml.xml",encoding = "Windows-1250")
 

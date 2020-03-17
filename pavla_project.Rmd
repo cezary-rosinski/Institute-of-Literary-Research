@@ -100,8 +100,18 @@ write.xlsx(test, "C:/Users/Cezary/Desktop/pavla_blognovel.xlsx",sheetName = "got
 
 ###
 #second web scraping
-
-page2 <- data.frame(url = c("http://www.saspi.cz/kniha-sbirka/155-o-princi-a-bilem-jednorozci","http://www.saspi.cz/kniha-sbirka/592-cesta-za-bilou-lodi-cast-1","http://www.saspi.cz/kniha-sbirka/155-zlaty-drak-1c","http://www.saspi.cz/kniha-sbirka/591-narod-prokletych","http://www.saspi.cz/kniha-sbirka/490-cerny-jezdec-ruka-spravedlnosti-01","http://www.saspi.cz/kniha-sbirka/676-enyalie-or-ohta-1","http://www.saspi.cz/kniha-sbirka/1401-omalora-1"),number=1:7,stringsAsFactors = FALSE)
+#browser
+#list_versions("chromedriver")
+rD <- rsDriver(port=4444L,browser="chrome", chromever="79.0.3945.36")
+remDr <- rD$client
+#annun
+# page2 <- data.frame(url = c("http://www.saspi.cz/kniha-sbirka/155-o-princi-a-bilem-jednorozci","http://www.saspi.cz/kniha-sbirka/592-cesta-za-bilou-lodi-cast-1","http://www.saspi.cz/kniha-sbirka/155-zlaty-drak-1c","http://www.saspi.cz/kniha-sbirka/591-narod-prokletych","http://www.saspi.cz/kniha-sbirka/490-cerny-jezdec-ruka-spravedlnosti-01","http://www.saspi.cz/kniha-sbirka/676-enyalie-or-ohta-1","http://www.saspi.cz/kniha-sbirka/1401-omalora-1"),number=1:7,stringsAsFactors = FALSE)
+#kondrakar
+# page2 <- data.frame(url = c("http://www.saspi.cz/kniha-sbirka/227-zivot-za-zivot-pomsta-za-pritele","http://www.saspi.cz/kniha-sbirka/2118-plamen-hvezd-kapitola-1-a-2"),number=1:2,stringsAsFactors = FALSE)
+# #jackie decker
+# page2 <- data.frame(url = c("http://www.saspi.cz/kniha-sbirka/632-pred-svetem-na-uteku-1-kapitola","http://www.saspi.cz/kniha-sbirka/872-hranice-nekonecna","http://www.saspi.cz/kniha-sbirka/954-kniha-osudu-cesta-bez-konce-prolog","http://www.saspi.cz/kniha-sbirka/1337-nepoznane-proroctvi-1kapitola","http://www.saspi.cz/kniha-sbirka/1689-z-rozhodnuti-rady","http://www.saspi.cz/kniha-sbirka/1677-prolog","http://www.saspi.cz/kniha-sbirka/1756-draci-stezka-prolog","http://www.saspi.cz/kniha-sbirka/1124-pikova-dama-prolog-a-1kapitola","http://www.saspi.cz/kniha-sbirka/2197-stripky-pribehu-1"),number=1:9,stringsAsFactors = FALSE)
+#iserbius
+page2 <- data.frame(url = c("http://www.saspi.cz/kniha-sbirka/1831-cernaruske-pribehy-jake-kowalski-prolog","http://www.saspi.cz/kniha-sbirka/1832-archon-1-kapitola-pocatek-valky","http://www.saspi.cz/kniha-sbirka/1974-redforce-vytrzeni-z-nudy","http://www.saspi.cz/kniha-sbirka/2043-prilis-divoka-zeme-1","http://www.saspi.cz/kniha-sbirka/2048-archon-twin-kanes-prolog","http://www.saspi.cz/kniha-sbirka/2262-pisen-preziti-prolog"),number=1:6,stringsAsFactors = FALSE)
 
 total <- data.frame(stringsAsFactors = FALSE)
 y <- 1:nrow(page2)
@@ -148,8 +158,13 @@ for (i in x) {
 test2 <- data.frame(comment_date) %>% 
   mutate(type_of_comment = paste("original",seq(1:n()),sep = ""))
 
-test3 <- data.frame(comment_date2) %>% 
+if (length(comment_date2)>0) {
+  test3 <- data.frame(comment_date2) %>% 
   mutate(type_of_comment = paste("reply",seq(1:n()),sep = ""))
+} else {
+  test3 <- data.frame(comment_date2)
+}
+
 
 comments <- test %>% 
   left_join(bind_rows(test2,test3 %>% rename(comment_date=comment_date2)),by = "type_of_comment") %>% 
@@ -179,7 +194,7 @@ blabla$distance[i] <- length(seq(from=as.Date(total$date_of_chapter[i], "%d.%m.%
   blabla$distance[i] <<- "error"
 })
 }
-write.xlsx(blabla, "C:/Users/Cezary/Desktop/pavla_annun.xlsx",sheetName = "gotowe")
+write.xlsx(blabla, "C:/Users/Cezary/Desktop/pavla_iserbius.xlsx",sheetName = "sheet")
 
 
 ```
