@@ -6,9 +6,9 @@ output: html_notebook
 ```{r libraries and conections}
 options(java.parameters = "-Xmx32000m")
 options(scipen = 999)
-pacman::p_load(googlesheets4,zoo,openxlsx,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,xlsx,magrittr,jsonlite)
+pacman::p_load(googlesheets4,zoo,openxlsx,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,xlsx,magrittr,jsonlite,openxlsx,xml2,XML)
 trim <- function (x) gsub("^\\s+|\\s+$", "", x)
-pbl_hp <- read.csv2("C:/Users/Cezary/Desktop/pbl_subject_headings.csv", encoding = "Windows-1250", header = TRUE, stringsAsFactors = FALSE)
+pbl_hp <- read.csv2("C:/Users/Cezary/Downloads/pbl_subject_headings.csv", encoding = "Windows-1250", header = TRUE, stringsAsFactors = FALSE)
 
 #połączenie z bazą PBL
 #jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/cezar/Documents/R/ojdbc6.jar")
@@ -17,382 +17,111 @@ jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Cezary/Downloads
 PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "IBL_SELECT", "CR333444")
 pbl_viaf <- sheets_read(ss = "1cEz73dGN2r2-TTc702yne9tKfH9PQ6UyAJ2zBSV6Jb0") %>%
   filter(czy_ten_sam!="nie") %>%
-  select(pbl_id,viaf) %>%
+  select(pbl_id,BN_name,viaf) %>%
   filter(!is.na(viaf)) %>%
   mutate(viaf = paste("viaf",str_extract(viaf,"\\d+"),sep = "")) %>%
   group_by(pbl_id) %>%
   mutate(viaf = paste(unique(viaf),collapse = "~")) %>%
   ungroup() %>%
   unique()
+
+pbl_viaf2 <- sheets_read(ss = "1_Bhwzo0xu4yTn8tF0ZNAZq9iIAqIxfcrjeLVCm_mggM") %>%
+  filter(czy_ten_sam!="nie") %>%
+  select(pbl_id,BN_name,viaf) %>%
+  filter(!is.na(viaf)) %>%
+  mutate(viaf = paste("viaf",str_extract(viaf,"\\d+"),sep = "")) %>%
+  group_by(pbl_id) %>%
+  mutate(viaf = paste(unique(viaf),collapse = "~")) %>%
+  ungroup() %>%
+  unique()
+
+pbl_viaf3 <- sheets_read(ss = "1L-7Zv9EyLr5FeCIY_s90rT5Hz6DjAScCx6NxfuHvoEQ") %>%
+  filter(czy_ten_sam!="nie") %>%
+  select(pbl_id,BN_name,viaf) %>%
+  filter(!is.na(viaf)) %>%
+  mutate(viaf = paste("viaf",str_extract(viaf,"\\d+"),sep = "")) %>%
+  group_by(pbl_id) %>%
+  mutate(viaf = paste(unique(viaf),collapse = "~")) %>%
+  ungroup() %>%
+  unique()
+
+pbl_viaf <- rbind(pbl_viaf,pbl_viaf2, pbl_viaf3) %>%
+  arrange(pbl_id) %>%
+  unique() %>% 
+  filter(!grepl("\\~",viaf))
+
+remove(pbl_viaf2)
+remove(pbl_viaf3)
 ```
 
-```{r pbl books}
-pbl_books1 <- dbGetQuery(PBL,
-                        "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(tw.tw_tworca_id) \"tworca_id\", tw.tw_nazwisko \"tworca_nazwisko\",
-                          tw.tw_imie \"tworca_imie\", to_char(a.am_autor_id) \"autor_id\", a.am_nazwisko \"autor_nazwisko\", 
-                          a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja_osoby\", 
-                          to_char(os.os_osoba_id) \"wspoltworca_id\", os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", 
-                          z.za_adnotacje \"adnotacja\", w.wy_nazwa \"wydawnictwo\", w.wy_miasto \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                        from pbl_zapisy z
-                        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
-                        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
-                        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
-                        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
-                        join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id 
-						join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
-                        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-                        join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id = z.za_zapis_id
-                        join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
-                        join IBL_OWNER.pbl_funkcje_osob fo on fo.fo_symbol=uo.uo_fo_symbol
-						            where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-						            and z.za_type like 'KS'")
-pbl_books2 <- dbGetQuery(PBL,
-                        "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(tw.tw_tworca_id) \"tworca_id\", tw.tw_nazwisko \"tworca_nazwisko\",
-                          tw.tw_imie \"tworca_imie\", to_char(a.am_autor_id) \"autor_id\", a.am_nazwisko \"autor_nazwisko\", 
-                          a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja_osoby\", 
-                          to_char(os.os_osoba_id) \"wspoltworca_id\", os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", 
-                          z.za_adnotacje \"adnotacja\", to_char(null) \"wydawnictwo\", to_char(null) \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                        from pbl_zapisy z
-                        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
-                        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
-                        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
-                        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
-                        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-                        join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id = z.za_zapis_id
-                        join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
-                        join IBL_OWNER.pbl_funkcje_osob fo on fo.fo_symbol=uo.uo_fo_symbol
-						where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-						and z.za_type like 'KS'")
-pbl_books3 <- dbGetQuery(PBL,
-                          "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", 
-                            dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(tw.tw_tworca_id) \"tworca_id\", tw.tw_nazwisko \"tworca_nazwisko\",
-                            tw.tw_imie \"tworca_imie\", to_char(a.am_autor_id) \"autor_id\", a.am_nazwisko \"autor_nazwisko\", 
-                            a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", to_char(null) \"funkcja_osoby\", 
-                            to_char(null) \"wspoltworca_id\", to_char(null) \"wspoltworca_nazwisko\", to_char(null) \"wspoltworca_imie\", 
-                            z.za_adnotacje \"adnotacja\", w.wy_nazwa \"wydawnictwo\", w.wy_miasto \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                          from pbl_zapisy z
-                          join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
-                          join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
-                          join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
-                          join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
-                          join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id 
-						  join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
-                          join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                          join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-						  where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-						  and z.za_type like 'KS'")
-pbl_books4 <- dbGetQuery(PBL,
-                        "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(tw.tw_tworca_id) \"tworca_id\", tw.tw_nazwisko \"tworca_nazwisko\",
-                          tw.tw_imie \"tworca_imie\", to_char(a.am_autor_id) \"autor_id\", a.am_nazwisko \"autor_nazwisko\", 
-                          a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", to_char(null) \"funkcja_osoby\", 
-                          to_char(null) \"wspoltworca_id\", to_char(null) \"wspoltworca_nazwisko\", to_char(null) \"wspoltworca_imie\", 
-                          z.za_adnotacje \"adnotacja\", to_char(null) \"wydawnictwo\", to_char(null) \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                        from pbl_zapisy z
-                        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
-                        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
-                        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
-                        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
-                        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-            						where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-            						and z.za_type like 'KS'")
-pbl_books5 <- dbGetQuery(PBL,
-                            "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", 
-                                    dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(tw.tw_tworca_id) \"tworca_id\", tw.tw_nazwisko \"tworca_nazwisko\",
-                                    tw.tw_imie \"tworca_imie\", to_char(null) \"autor_id\", to_char(null) \"autor_nazwisko\", 
-                                    to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja_osoby\", 
-                                    to_char(os.os_osoba_id) \"wspoltworca_id\", os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", 
-                                    z.za_adnotacje \"adnotacja\", w.wy_nazwa \"wydawnictwo\", w.wy_miasto \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id ,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                            from pbl_zapisy z
-                            join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
-                            join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
-                            join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id 
-							join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
-                            join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                            join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-                            join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id = z.za_zapis_id
-                            join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
-                            join IBL_OWNER.pbl_funkcje_osob fo on fo.fo_symbol=uo.uo_fo_symbol
-							where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-							and z.za_type like 'KS'")
-pbl_books6 <- dbGetQuery(PBL,
-                         "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(tw.tw_tworca_id) \"tworca_id\", tw.tw_nazwisko \"tworca_nazwisko\",
-                          tw.tw_imie \"tworca_imie\", to_char(null) \"autor_id\", to_char(null) \"autor_nazwisko\", 
-                          to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja_osoby\", 
-                          to_char(os.os_osoba_id) \"wspoltworca_id\", os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", 
-                          z.za_adnotacje \"adnotacja\", to_char(null) \"wydawnictwo\", to_char(null) \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                        from pbl_zapisy z
-                        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
-                        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
-                        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-                        join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id = z.za_zapis_id
-                        join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
-                        join IBL_OWNER.pbl_funkcje_osob fo on fo.fo_symbol=uo.uo_fo_symbol
-						            where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-						            and z.za_type like 'KS'")
-pbl_books7 <- dbGetQuery(PBL,
-                            "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", 
-                                    dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(tw.tw_tworca_id) \"tworca_id\", tw.tw_nazwisko \"tworca_nazwisko\",
-                                    tw.tw_imie \"tworca_imie\", to_char(null) \"autor_id\", to_char(null) \"autor_nazwisko\", 
-                                    to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", to_char(null) \"funkcja_osoby\", 
-                                    to_char(null) \"wspoltworca_id\", to_char(null) \"wspoltworca_nazwisko\", to_char(null) \"wspoltworca_imie\", 
-                                    z.za_adnotacje \"adnotacja\", w.wy_nazwa \"wydawnictwo\", w.wy_miasto \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id ,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                            from pbl_zapisy z
-                            join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
-                            join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
-                            join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id 
-							join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
-                            join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                            join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-							where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-							and z.za_type like 'KS'")
-pbl_books8 <- dbGetQuery(PBL,
-                            "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", 
-                                    dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(tw.tw_tworca_id) \"tworca_id\", tw.tw_nazwisko \"tworca_nazwisko\",
-                                    tw.tw_imie \"tworca_imie\", to_char(null) \"autor_id\", to_char(null) \"autor_nazwisko\", 
-                                    to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", to_char(null) \"funkcja_osoby\", 
-                                    to_char(null) \"wspoltworca_id\", to_char(null) \"wspoltworca_nazwisko\", to_char(null) \"wspoltworca_imie\", 
-                                    z.za_adnotacje \"adnotacja\", to_char(null) \"wydawnictwo\", to_char(null) \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id ,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                            from pbl_zapisy z
-                            join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
-                            join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
-                            join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                            join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-							where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-							and z.za_type like 'KS'")
-pbl_books <- sqldf("select *
-              from pbl_books1 a
-              UNION
-              select *
-              from pbl_books2 b
-              where b.rekord_id not in (select a.rekord_id
-              from pbl_books1 a)")
-pbl_books <- sqldf("select *
-                      from pbl_books a
-                      UNION
-                      select * 
-                      from pbl_books3 b
-                      where b.rekord_id not in (select a.rekord_id
-                      from pbl_books a)")
-pbl_books <- sqldf("select *
-                      from pbl_books a
-                      UNION
-                      select *
-                      from pbl_books4 b
-                      where b.rekord_id not in (select a.rekord_id
-                      from pbl_books a)")
-pbl_books <- sqldf("select *
-                      from pbl_books a
-                      UNION
-                      select *
-                      from pbl_books5 b
-                      where b.rekord_id not in (select a.rekord_id
-                      from pbl_books a)")
-pbl_books <- sqldf("select *
-                      from pbl_books a
-                      UNION
-                      select *
-                      from pbl_books6 b
-                      where b.rekord_id not in (select a.rekord_id
-                      from pbl_books a)")
-pbl_books <- sqldf("select *
-                      from pbl_books a
-                      UNION
-                      select *
-                      from pbl_books7 b
-                      where b.rekord_id not in (select a.rekord_id
-                      from pbl_books a)")
-pbl_books <- sqldf("select *
-                      from pbl_books a
-                      UNION
-                      select *
-                      from pbl_books8 b
-                      where b.rekord_id not in (select a.rekord_id
-                      from pbl_books a)")
-pbl_books1 <- dbGetQuery(PBL,
-                        "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", 
-                          dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_id\", to_char(null) \"tworca_nazwisko\",
-                          to_char(null) \"tworca_imie\", to_char(a.am_autor_id) \"autor_id\", a.am_nazwisko \"autor_nazwisko\", 
-                          a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja_osoby\", 
-                          to_char(os.os_osoba_id) \"wspoltworca_id\", os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", 
-                          z.za_adnotacje \"adnotacja\", w.wy_nazwa \"wydawnictwo\", w.wy_miasto \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                        from pbl_zapisy z
-                        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
-                        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
-                        join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id 
-						join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
-                        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-                        join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id = z.za_zapis_id
-                        join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
-                        join IBL_OWNER.pbl_funkcje_osob fo on fo.fo_symbol=uo.uo_fo_symbol
-						where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-						and z.za_type like 'KS'")
-pbl_books2 <- dbGetQuery(PBL,
-                          "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", 
-                            dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_id\", to_char(null) \"tworca_nazwisko\",
-                            to_char(null) \"tworca_imie\", to_char(a.am_autor_id) \"autor_id\", a.am_nazwisko \"autor_nazwisko\", 
-                            a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", to_char(null) \"funkcja_osoby\", 
-                            to_char(null) \"wspoltworca_id\", to_char(null) \"wspoltworca_nazwisko\", to_char(null) \"wspoltworca_imie\", 
-                            z.za_adnotacje \"adnotacja\", w.wy_nazwa \"wydawnictwo\", w.wy_miasto \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                          from pbl_zapisy z
-                          join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
-                          join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
-                          join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id 
-						  join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
-                          join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                          join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-						  where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-						  and z.za_type like 'KS'")
-pbl_books3 <- dbGetQuery(PBL,
-                        "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", 
-                          dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_id\", to_char(null) \"tworca_nazwisko\",
-                          to_char(null) \"tworca_imie\", to_char(a.am_autor_id) \"autor_id\", a.am_nazwisko \"autor_nazwisko\", 
-                          a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja_osoby\", 
-                          to_char(os.os_osoba_id) \"wspoltworca_id\", os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", 
-                          z.za_adnotacje \"adnotacja\", to_char(null) \"wydawnictwo\", to_char(null) \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                        from pbl_zapisy z
-                        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
-                        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
-                        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-                        join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id = z.za_zapis_id
-                        join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
-                        join IBL_OWNER.pbl_funkcje_osob fo on fo.fo_symbol=uo.uo_fo_symbol
-						where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-						and z.za_type like 'KS'")
-pbl_books4 <- dbGetQuery(PBL,
-                        "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", 
-                          dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_id\", to_char(null) \"tworca_nazwisko\",
-                          to_char(null) \"tworca_imie\", to_char(a.am_autor_id) \"autor_id\", a.am_nazwisko \"autor_nazwisko\", 
-                          a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", to_char(null) \"funkcja_osoby\", 
-                          to_char(null) \"wspoltworca_id\", to_char(null) \"wspoltworca_nazwisko\", to_char(null) \"wspoltworca_imie\", 
-                          z.za_adnotacje \"adnotacja\", to_char(null) \"wydawnictwo\", to_char(null) \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                        from pbl_zapisy z
-                        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
-                        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
-                        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-						            where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-						            and z.za_type like 'KS'")
-pbl_books5 <- dbGetQuery(PBL,
-                            "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", 
-                                    dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_id\", to_char(null) \"tworca_nazwisko\",
-                                    to_char(null) \"tworca_imie\", to_char(null) \"autor_id\", to_char(null) \"autor_nazwisko\", 
-                                    to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja_osoby\", 
-                                    to_char(os.os_osoba_id) \"wspoltworca_id\", os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", 
-                                    z.za_adnotacje \"adnotacja\", w.wy_nazwa \"wydawnictwo\", w.wy_miasto \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                            from pbl_zapisy z
-                            join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id 
-							join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
-                            join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                            join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-                            join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id = z.za_zapis_id
-                            join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
-                            join IBL_OWNER.pbl_funkcje_osob fo on fo.fo_symbol=uo.uo_fo_symbol
-							where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-							and z.za_type like 'KS'")
-pbl_books6 <- dbGetQuery(PBL,
-                            "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", 
-                                    dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_id\", to_char(null) \"tworca_nazwisko\",
-                                    to_char(null) \"tworca_imie\", to_char(null) \"autor_id\", to_char(null) \"autor_nazwisko\", 
-                                    to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja_osoby\", 
-                                    to_char(os.os_osoba_id) \"wspoltworca_id\", os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", 
-                                    z.za_adnotacje \"adnotacja\", to_char(null) \"wydawnictwo\", to_char(null) \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                            from pbl_zapisy z
-                            join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                            join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-                            join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id = z.za_zapis_id
-                            join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
-                            join IBL_OWNER.pbl_funkcje_osob fo on fo.fo_symbol=uo.uo_fo_symbol
-							              where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-							              and z.za_type like 'KS'")
-pbl_books7 <- dbGetQuery(PBL,
-                            "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", 
-                                    dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_id\", to_char(null) \"tworca_nazwisko\",
-                                    to_char(null) \"tworca_imie\", to_char(null) \"autor_id\", to_char(null) \"autor_nazwisko\", 
-                                    to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", to_char(null) \"funkcja_osoby\", 
-                                    to_char(null) \"wspoltworca_id\", to_char(null) \"wspoltworca_nazwisko\", to_char(null) \"wspoltworca_imie\", 
-                                    z.za_adnotacje \"adnotacja\", w.wy_nazwa \"wydawnictwo\", w.wy_miasto \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
-                            from pbl_zapisy z
-                            join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id 
-							              join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
-                            join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                            join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-							              where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-							              and z.za_type like 'KS'")
-pbl_books8 <- dbGetQuery(PBL,
-                            "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", 
-                                    dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_id\", to_char(null) \"tworca_nazwisko\",
-                                    to_char(null) \"tworca_imie\", to_char(null) \"autor_id\", to_char(null) \"autor_nazwisko\", 
-                                    to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", to_char(null) \"funkcja_osoby\", 
-                                    to_char(null) \"wspoltworca_id\", to_char(null) \"wspoltworca_nazwisko\", to_char(null) \"wspoltworca_imie\", 
-                                    z.za_adnotacje \"adnotacja\", to_char(null) \"wydawnictwo\", to_char(null) \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA                          
-                            from pbl_zapisy z
-                            join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                            join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-							where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
-							and z.za_type like 'KS'")
+```{r addictional info about authors from viaf}
+# x <- 1:nrow(pbl_viaf)
+# viaf_name_dates <- data.frame(stringsAsFactors = FALSE)
+# for (i in x) {
+#   progress(match(i,x), max.value = length(x))
+#   url <- paste("http://viaf.org/viaf/",str_extract(pbl_viaf$viaf[i],"\\d+"),"/viaf.xml",sep = "")
+#   xml <- xmlParse(url)
+#   tryCatch({
+#     name <- setNames(xmlToDataFrame(nodes = getNodeSet(xml, "//ns1:VIAFCluster/ns1:mainHeadings/ns1:data/ns1:text")),"name")
+#     name <- paste(unlist(name), collapse = "~")
+#     }, error=function(e){
+#       name <<- "Brak danych (CR)"
+#       })
+#     tryCatch({
+#     birthDate <- setNames(xmlToDataFrame(nodes = getNodeSet(xml, "//ns1:birthDate")),"birthDate")
+#     birthDate <- paste(unlist(birthDate), collapse = "~")
+#     }, error=function(e){
+#       birthDate <<- "Brak danych (CR)"
+#       })
+#     tryCatch({
+#     deathDate <- setNames(xmlToDataFrame(nodes = getNodeSet(xml, "//ns1:deathDate")),"deathDate")
+#     deathDate <- paste(unlist(deathDate), collapse = "~")
+#     }, error=function(e){
+#       deathDate <<- "Brak danych (CR)"
+#       })
+#   iteration <- pbl_viaf %>% slice(i) %>% 
+#     bind_cols(name=name,birthDate=birthDate,deathDate=deathDate)
+#   viaf_name_dates <- rbind(viaf_name_dates,iteration)
+# }
+# write.xlsx(viaf_name_dates, "C:/Users/Cezary/Desktop/viaf_name_dates.xlsx",sheetName = "pbl_viaf")
 
-pbl_books1 <- sqldf("select *
-              from pbl_books1 a
-              UNION
-              select *
-              from pbl_books2 b
-              where b.rekord_id not in (select a.rekord_id
-              from pbl_books1 a)")
-pbl_books1 <- sqldf("select *
-                      from pbl_books1 a
-                      UNION
-                      select * 
-                      from pbl_books3 b
-                      where b.rekord_id not in (select a.rekord_id
-                      from pbl_books1 a)")
-pbl_books1 <- sqldf("select *
-                      from pbl_books1 a
-                      UNION
-                      select *
-                      from pbl_books4 b
-                      where b.rekord_id not in (select a.rekord_id
-                      from pbl_books1 a)")
-pbl_books1 <- sqldf("select *
-                      from pbl_books1 a
-                      UNION
-                      select *
-                      from pbl_books5 b
-                      where b.rekord_id not in (select a.rekord_id
-                      from pbl_books1 a)")
-pbl_books1 <- sqldf("select *
-                      from pbl_books1 a
-                      UNION
-                      select *
-                      from pbl_books6 b
-                      where b.rekord_id not in (select a.rekord_id
-                      from pbl_books1 a)")
-pbl_books1 <- sqldf("select *
-                      from pbl_books1 a
-                      UNION
-                      select *
-                      from pbl_books7 b
-                      where b.rekord_id not in (select a.rekord_id
-                      from pbl_books1 a)")
-pbl_books1 <- sqldf("select *
-                      from pbl_books1 a
-                      UNION
-                      select *
-                      from pbl_books8 b
-                      where b.rekord_id not in (select a.rekord_id
-                      from pbl_books1 a)")
-pbl_books <- sqldf("select *
-              from pbl_books a
-              UNION
-              select *
-              from pbl_books1 b
-              where b.rekord_id not in (select a.rekord_id
-              from pbl_books a)")
+# pbl_viaf_names_dates <- pbl_viaf %>% 
+#   left_join(viaf_name_dates,by = c("pbl_id","viaf")) %>% 
+#   mutate(`$a` = str_extract(BN_name,"(.*?)(?=\\|.*$)"),
+#          `$a` = str_extract(BN_name,"(.*?)(?=\\ \\(\\d.*$)"),
+#          `$a` = ifelse(is.na(`$a`),str_extract(BN_name,"(.*?)(?=\\|.*$)"),as.character(`$a`)),
+#          `$d` = ifelse(birthDate==0&deathDate==0,"",
+#                        ifelse(deathDate==0,paste(substr(birthDate,1,4),"- ",sep = ""),
+#                               ifelse(birthDate==0,paste(" -",substr(deathDate,1,4),sep = ""),paste(substr(birthDate,1,4),"-",substr(deathDate,1,4),sep = ""))))) %>% 
+#   select(pbl_id,`$a`,`$d`,viaf)
+# write.xlsx(pbl_viaf_names_dates, "C:/Users/Cezary/Desktop/pbl_viaf_names_dates.xlsx",sheetName = "pbl_viaf")
+
+pbl_viaf_names_dates <- sheets_read(ss = "1S_KsVppXzisd4zlsZ70rJE3d40SF9XRUO75no360dnY")
+
+```
+
+
+```{r pbl books}
+pbl_books <- dbGetQuery(PBL,
+                        "select z.za_zapis_id \"rekord_id\", z.za_type \"typ\", rz.rz_rodzaj_id \"rodzaj_zapisu_id\", rz.rz_nazwa \"rodzaj_zapisu\", dz.dz_dzial_id \"dzial_id\", dz.dz_nazwa \"dzial\", to_char(tw.tw_tworca_id) \"tworca_id\", tw.tw_nazwisko \"tworca_nazwisko\",
+                          tw.tw_imie \"tworca_imie\", to_char(a.am_autor_id) \"autor_id\", a.am_nazwisko \"autor_nazwisko\", 
+                          a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja_osoby\", 
+                          to_char(os.os_osoba_id) \"wspoltworca_id\", os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", 
+                          z.za_adnotacje \"adnotacja\", w.wy_nazwa \"wydawnictwo\", w.wy_miasto \"miejscowosc\", z.za_rok_wydania \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fizyczny\", z.za_uzytk_wpisal, z.za_ro_rok, z.za_tytul_oryginalu, z.za_wydanie, z.za_instytucja, z.za_seria_wydawnicza, z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA
+                        from pbl_zapisy z
+                        full outer join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+                        full outer join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+                        full outer join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+                        full outer join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+                        full outer join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id 
+						full outer join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+                        full outer join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+                        full outer join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+                        full outer join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id = z.za_zapis_id
+                        full outer join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+                        full outer join IBL_OWNER.pbl_funkcje_osob fo on fo.fo_symbol=uo.uo_fo_symbol
+						            where (z.za_status_imp is null OR z.za_status_imp like 'IOK')
+						            and z.za_type like 'KS'")
 
 hasla_przekrojowe <- dbGetQuery(PBL,
                                 "select hpz.hz_za_zapis_id,hp.hp_nazwa,khp.kh_nazwa
@@ -423,30 +152,30 @@ pbl_books <- merge(pbl_books,hasla_przekrojowe,by.x = "rekord_id", by.y = "HZ_ZA
 pbl_books <- merge(pbl_books,pbl_viaf,by.x = "tworca_id", by.y = "pbl_id", all.x = TRUE)
 pbl_books <- pbl_books %>%
   mutate(tworca_imie = ifelse(is.na(tworca_id),NA,
-                              ifelse(is.na(viaf),as.character(tworca_imie),paste(tworca_imie,"$7",viaf,sep = "")))) %>%
+                              ifelse(is.na(viaf),as.character(tworca_imie),paste(tworca_imie,"$0",viaf,sep = "")))) %>%
   arrange(rekord_id)
 ```
 
 ```{r creating pbl person authority file}
-pbl_bn_viaf <- gs_read(gs_title("mapowanie_osob_bn_pbl"), ws = "pbl_bn") %>%
-  select(id) %>%
-  unique()
-
-pbl_viaf <- data.frame(stringsAsFactors=FALSE)
-x <- 1:length(pbl_bn_viaf$id)
-for (i in x) {
-  progress(match(i,x), max.value = length(x)) 
-  tryCatch({
-  name <- paste(str_replace_all(str_remove_all(paste(unlist(jsonlite::fromJSON(paste("https://data.bn.org.pl/api/authorities.json?id=",pbl_bn_viaf$id[i],sep = "")) %>% .$authorities %>% .$marc %>% .$fields %>% `[[`(1) %>% .$`100` %>% `[[`(3)),collapse = "|"),"\\|NA"),"(\\|)(\\(\\d+)"," \\2"),str_replace_all(str_remove_all(paste(unlist(jsonlite::fromJSON(paste("https://data.bn.org.pl/api/authorities.json?id=",pbl_bn_viaf$id[i],sep = "")) %>% .$authorities %>% .$marc %>% .$fields %>% `[[`(1) %>% .$`400` %>% `[[`(3)),collapse = "|"),"\\|NA"),"(\\|)(\\(\\.+)"," \\2"),sep = "|")
-  viaf <- str_remove_all(paste(unlist(jsonlite::fromJSON(paste("https://data.bn.org.pl/api/authorities.json?id=",pbl_bn_viaf$id[i],sep = "")) %>% .$authorities %>% .$marc %>% .$fields %>% `[[`(1) %>% .$`024` %>% .$subfields),collapse = "|"),"(\\|NA)|(\\|viaf)")
-  }, error=function(e){
-                     name <<- "brak danych (CR)"
-                     viaf <<- "brak danych (CR)"
-  })
-  iteration <- data.frame(id = pbl_bn_viaf$id[i], name = name, viaf = viaf)
-  pbl_viaf <- rbind(pbl_viaf,iteration)
-}
-write.csv2(pbl_viaf, file = "C:/Users/Cezary/Desktop/pbl_bn_viaf.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+# pbl_bn_viaf <- gs_read(gs_title("mapowanie_osob_bn_pbl"), ws = "pbl_bn") %>%
+#   select(id) %>%
+#   unique()
+# 
+# pbl_viaf <- data.frame(stringsAsFactors=FALSE)
+# x <- 1:length(pbl_bn_viaf$id)
+# for (i in x) {
+#   progress(match(i,x), max.value = length(x)) 
+#   tryCatch({
+#   name <- paste(str_replace_all(str_remove_all(paste(unlist(jsonlite::fromJSON(paste("https://data.bn.org.pl/api/authorities.json?id=",pbl_bn_viaf$id[i],sep = "")) %>% .$authorities %>% .$marc %>% .$fields %>% `[[`(1) %>% .$`100` %>% `[[`(3)),collapse = "|"),"\\|NA"),"(\\|)(\\(\\d+)"," \\2"),str_replace_all(str_remove_all(paste(unlist(jsonlite::fromJSON(paste("https://data.bn.org.pl/api/authorities.json?id=",pbl_bn_viaf$id[i],sep = "")) %>% .$authorities %>% .$marc %>% .$fields %>% `[[`(1) %>% .$`400` %>% `[[`(3)),collapse = "|"),"\\|NA"),"(\\|)(\\(\\.+)"," \\2"),sep = "|")
+#   viaf <- str_remove_all(paste(unlist(jsonlite::fromJSON(paste("https://data.bn.org.pl/api/authorities.json?id=",pbl_bn_viaf$id[i],sep = "")) %>% .$authorities %>% .$marc %>% .$fields %>% `[[`(1) %>% .$`024` %>% .$subfields),collapse = "|"),"(\\|NA)|(\\|viaf)")
+#   }, error=function(e){
+#                      name <<- "brak danych (CR)"
+#                      viaf <<- "brak danych (CR)"
+#   })
+#   iteration <- data.frame(id = pbl_bn_viaf$id[i], name = name, viaf = viaf)
+#   pbl_viaf <- rbind(pbl_viaf,iteration)
+# }
+# write.csv2(pbl_viaf, file = "C:/Users/Cezary/Desktop/pbl_bn_viaf.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 ```
 
@@ -845,7 +574,7 @@ pbl_articles <- merge(pbl_articles,hasla_przekrojowe,by.x = "rekord_id", by.y = 
 pbl_articles <- merge(pbl_articles,pbl_viaf,by.x = "tworca_id", by.y = "pbl_id", all.x = TRUE)
 pbl_articles <- pbl_articles %>%
   mutate(tworca_imie = ifelse(is.na(tworca_id),NA,
-                              ifelse(is.na(viaf),as.character(tworca_imie),paste(tworca_imie,"$7",viaf,sep = "")))) %>%
+                              ifelse(is.na(viaf),as.character(tworca_imie),paste(tworca_imie,"$0",viaf,sep = "")))) %>%
   arrange(rekord_id)
 ```
 
