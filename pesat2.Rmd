@@ -15,43 +15,44 @@ pbl_hp <- read.csv2("C:/Users/Cezary/Downloads/pbl_subject_headings.csv", encodi
 #jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="E:/Cezary/Documents/ojdbc6.jar")
 jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Cezary/Downloads/ojdbc6.jar")
 PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "IBL_SELECT", "CR333444")
-pbl_viaf <- sheets_read(ss = "1cEz73dGN2r2-TTc702yne9tKfH9PQ6UyAJ2zBSV6Jb0") %>%
-  filter(czy_ten_sam!="nie") %>%
-  select(pbl_id,BN_name,viaf) %>%
-  filter(!is.na(viaf)) %>%
-  mutate(viaf = paste("viaf",str_extract(viaf,"\\d+"),sep = "")) %>%
-  group_by(pbl_id) %>%
-  mutate(viaf = paste(unique(viaf),collapse = "~")) %>%
-  ungroup() %>%
-  unique()
 
-pbl_viaf2 <- sheets_read(ss = "1_Bhwzo0xu4yTn8tF0ZNAZq9iIAqIxfcrjeLVCm_mggM") %>%
-  filter(czy_ten_sam!="nie") %>%
-  select(pbl_id,BN_name,viaf) %>%
-  filter(!is.na(viaf)) %>%
-  mutate(viaf = paste("viaf",str_extract(viaf,"\\d+"),sep = "")) %>%
-  group_by(pbl_id) %>%
-  mutate(viaf = paste(unique(viaf),collapse = "~")) %>%
-  ungroup() %>%
-  unique()
-
-pbl_viaf3 <- sheets_read(ss = "1L-7Zv9EyLr5FeCIY_s90rT5Hz6DjAScCx6NxfuHvoEQ") %>%
-  filter(czy_ten_sam!="nie") %>%
-  select(pbl_id,BN_name,viaf) %>%
-  filter(!is.na(viaf)) %>%
-  mutate(viaf = paste("viaf",str_extract(viaf,"\\d+"),sep = "")) %>%
-  group_by(pbl_id) %>%
-  mutate(viaf = paste(unique(viaf),collapse = "~")) %>%
-  ungroup() %>%
-  unique()
-
-pbl_viaf <- rbind(pbl_viaf,pbl_viaf2, pbl_viaf3) %>%
-  arrange(pbl_id) %>%
-  unique() %>% 
-  filter(!grepl("\\~",viaf))
-
-remove(pbl_viaf2)
-remove(pbl_viaf3)
+# pbl_viaf <- sheets_read(ss = "1cEz73dGN2r2-TTc702yne9tKfH9PQ6UyAJ2zBSV6Jb0") %>%
+#   filter(czy_ten_sam!="nie") %>%
+#   select(pbl_id,BN_name,viaf) %>%
+#   filter(!is.na(viaf)) %>%
+#   mutate(viaf = paste("viaf",str_extract(viaf,"\\d+"),sep = "")) %>%
+#   group_by(pbl_id) %>%
+#   mutate(viaf = paste(unique(viaf),collapse = "~")) %>%
+#   ungroup() %>%
+#   unique()
+# 
+# pbl_viaf2 <- sheets_read(ss = "1_Bhwzo0xu4yTn8tF0ZNAZq9iIAqIxfcrjeLVCm_mggM") %>%
+#   filter(czy_ten_sam!="nie") %>%
+#   select(pbl_id,BN_name,viaf) %>%
+#   filter(!is.na(viaf)) %>%
+#   mutate(viaf = paste("viaf",str_extract(viaf,"\\d+"),sep = "")) %>%
+#   group_by(pbl_id) %>%
+#   mutate(viaf = paste(unique(viaf),collapse = "~")) %>%
+#   ungroup() %>%
+#   unique()
+# 
+# pbl_viaf3 <- sheets_read(ss = "1L-7Zv9EyLr5FeCIY_s90rT5Hz6DjAScCx6NxfuHvoEQ") %>%
+#   filter(czy_ten_sam!="nie") %>%
+#   select(pbl_id,BN_name,viaf) %>%
+#   filter(!is.na(viaf)) %>%
+#   mutate(viaf = paste("viaf",str_extract(viaf,"\\d+"),sep = "")) %>%
+#   group_by(pbl_id) %>%
+#   mutate(viaf = paste(unique(viaf),collapse = "~")) %>%
+#   ungroup() %>%
+#   unique()
+# 
+# pbl_viaf <- rbind(pbl_viaf,pbl_viaf2, pbl_viaf3) %>%
+#   arrange(pbl_id) %>%
+#   unique() %>% 
+#   filter(!grepl("\\~",viaf))
+# 
+# remove(pbl_viaf2)
+# remove(pbl_viaf3)
 ```
 
 ```{r addictional info about authors from viaf}
@@ -149,12 +150,41 @@ indeks_osobowy <- dbGetQuery(PBL,
 
 pbl_books <- merge(pbl_books,indeks_osobowy,by.x = "rekord_id",by.y = "ODI_ZA_ZAPIS_ID", all.x = TRUE)
 pbl_books <- merge(pbl_books,hasla_przekrojowe,by.x = "rekord_id", by.y = "HZ_ZA_ZAPIS_ID", all.x = TRUE)
-pbl_books <- merge(pbl_books,pbl_viaf,by.x = "tworca_id", by.y = "pbl_id", all.x = TRUE)
-pbl_books <- pbl_books %>%
-  mutate(tworca_imie = ifelse(is.na(tworca_id),NA,
-                              ifelse(is.na(viaf),as.character(tworca_imie),paste(tworca_imie,"$0",viaf,sep = "")))) %>%
+pbl_books <- merge(pbl_books,pbl_viaf_names_dates,by.x = "tworca_id", by.y = "pbl_id", all.x = TRUE) %>%
   arrange(rekord_id)
 ```
+
+```{r pbl reviews and books}
+pbl_reviews_books <- dbGetQuery(PBL,
+                                "select z.za_zapis_id \"rec_id\", a.am_nazwisko \"rec_a_naz\", a.am_imie \"rec_a_im\", z.za_tytul \"rec_tyt\", zrr.zrr_tytul \"rec_czas_tyt\", zrr.zrr_miejsce_wydania \"rec_czas_miejsc\", z.za_zrodlo_rok \"rec_rok\", z.za_zrodlo_nr \"rec_nr\", z.za_zrodlo_str \"rec_str\", 
+                                z2.za_zapis_id \"ks_id\", a2.am_nazwisko \"ks_a_naz\", a2.am_imie \"ks_a_im\", z2.za_tytul \"ks_tyt\", w.wy_nazwa \"ks_wyd_nazw\", w.wy_miasto \"ks_wyd_miejsc\", z2.za_ro_rok
+                                from pbl_zapisy z
+                                join pbl_zapisy z2 on z.za_za_zapis_id=z2.za_zapis_id
+                                full outer join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+                                full outer join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+                                full outer join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+                                full outer join IBL_OWNER.pbl_zrodla_roczniki zrr on zrr.zrr_zr_zrodlo_id=zr.zr_zrodlo_id and zrr.zrr_rocznik=z.za_zrodlo_rok 
+                                full outer join IBL_OWNER.pbl_zapisy_autorzy za2 on za2.zaam_za_zapis_id=z2.za_zapis_id
+                                full outer join IBL_OWNER.pbl_autorzy a2 on za2.zaam_am_autor_id=a2.am_autor_id
+                                full outer join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z2.za_zapis_id 
+                                full outer join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+                                where z.za_rz_rodzaj1_id = 18
+                                and z2.za_type like 'KS'
+                                order by \"ks_id\" asc, \"rec_id\" asc") %>%
+  mutate(rec_a_naz = ifelse(is.na(rec_a_naz),"[no author]",as.character(rec_a_naz)),
+         rec_tyt = ifelse(is.na(rec_tyt),"[no title]",as.character(rec_tyt)),
+         ks_a_naz = ifelse(is.na(ks_a_naz),"[no author]",as.character(ks_a_naz))) %>% 
+  unite("rec_autor", rec_a_naz:rec_a_im,sep = " ",na.rm = TRUE) %>% 
+  unite("rec_czas_miejsc", rec_czas_miejsc:rec_rok,sep = " ",na.rm = TRUE) %>%
+  unite("rec", rec_autor:rec_str,sep = ", ",na.rm = TRUE) %>%
+  unite("ks_autor", ks_a_naz:ks_a_im,sep = " ",na.rm = TRUE) %>% 
+  unite("ks_wyd_miejsc", ks_wyd_miejsc:ZA_RO_ROK,sep = " ",na.rm = TRUE) %>%
+  unite("ks", ks_autor:ks_wyd_miejsc,sep = ", ",na.rm = TRUE) #%>% 
+  # mutate(rec_id = paste("pl",sprintf("%09d", rec_id),sep = "")) %>% 
+  # mutate(ks_id = paste("pl",sprintf("%09d", ks_id),sep = ""))
+
+```
+
 
 ```{r creating pbl person authority file}
 # pbl_bn_viaf <- gs_read(gs_title("mapowanie_osob_bn_pbl"), ws = "pbl_bn") %>%
@@ -213,13 +243,14 @@ X040 <- "\\\\$aIBL$bpol"
 
 #X100
 X100 <- pbl_books %>%
-  select(rekord_id,rodzaj_zapisu,tworca_nazwisko,tworca_imie,autor_nazwisko,autor_imie) %>%
+  select(rekord_id,rodzaj_zapisu,tworca_nazwisko,tworca_imie,autor_nazwisko,autor_imie,`$a`,`$d`,`$0`) %>%
   unique() %>%
   mutate(tworca_nazwisko = ifelse(rodzaj_zapisu=="książka twórcy (podmiotowa)"&!is.na(tworca_nazwisko)&grepl(",",tworca_nazwisko)&tworca_imie=="*",as.character(autor_nazwisko),as.character(tworca_nazwisko)),
          tworca_imie = ifelse(rodzaj_zapisu=="książka twórcy (podmiotowa)"&!is.na(tworca_nazwisko)&tworca_nazwisko==autor_nazwisko&tworca_imie=="*",as.character(autor_imie),as.character(tworca_imie)),
          X100 = ifelse(is.na(tworca_nazwisko),NA,
-                       ifelse(rodzaj_zapisu=="książka twórcy (podmiotowa)",paste("1\\$a",tworca_nazwisko,", ",tworca_imie,"$4aut",sep = ""),
-                              ifelse(!is.na(autor_nazwisko),paste("1 $a",autor_nazwisko,", ",autor_imie,"$4aut",sep = ""),NA)))) %>%
+                       ifelse(rodzaj_zapisu=="książka twórcy (podmiotowa)"&nchar(paste(tworca_nazwisko,tworca_imie,sep = ", "))==nchar(`$a`)&as.character(str_extract_all(paste(tworca_nazwisko,tworca_imie,sep = ", "),"[:upper:]"))==as.character(str_extract_all(`$a`,"[:upper:]")), paste("1\\$a",`$a`,"$d",`$d`,"$4aut$0",`$0`,sep = ""),
+                              ifelse(rodzaj_zapisu=="książka twórcy (podmiotowa)",paste("1\\$a",tworca_nazwisko,", ",tworca_imie,"$d",`$d`,"$4aut$0",`$0`,sep = ""),
+                                     ifelse(!is.na(autor_nazwisko),paste("1 $a",autor_nazwisko,", ",autor_imie,"$4aut",sep = ""),NA))))) %>%
   select(rekord_id,X100) %>%
   group_by(rekord_id) %>%
   mutate(X100 = paste(X100,collapse = "|")) %>%
@@ -372,6 +403,7 @@ X630 <- pbl_books %>%
   select(rekord_id,HP_NAZWA,KH_NAZWA) %>%
   unique() %>% 
   inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.63"),by = c("HP_NAZWA","KH_NAZWA")) %>%
+  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.63"),by = c("dzial"="HP_NAZWA")) %>%
   mutate(X630 = trim(ifelse(!is.na(KH_NAZWA),paste("\\4$a",HP_NAZWA,", ",KH_NAZWA,sep = ""),paste("\\4$a",HP_NAZWA,sep = "")))) %>%
   select(rekord_id,X630) %>%
   group_by(rekord_id) %>%
@@ -383,9 +415,10 @@ X630 <- pbl_books %>%
 
 #X650
 X650 <- pbl_books %>%
-  select(rekord_id,HP_NAZWA,KH_NAZWA) %>%
+  select(rekord_id,HP_NAZWA,KH_NAZWA,dzial) %>%
   unique() %>% 
   inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.65"|MARC_FIELD=="24.65"),by = c("HP_NAZWA","KH_NAZWA")) %>%
+  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.65"|MARC_FIELD=="24.65"),by = c("dzial"="HP_NAZWA")) %>%
   mutate(X650 = trim(ifelse(MARC_FIELD=="4.65",
                             ifelse(!is.na(KH_NAZWA),paste("04$a",HP_NAZWA,", ",KH_NAZWA,sep = ""),paste("04$a",HP_NAZWA,sep = "")),
                        ifelse(MARC_FIELD=="24.65",
@@ -397,6 +430,8 @@ X650 <- pbl_books %>%
   unique() %>%
   full_join(.,pbl_books %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
   arrange(rekord_id)
+
+mutate(X964 = trim(str_replace(X964,"(.*)( - .$)","\\1")))
 
 #X651
 X651 <- pbl_books %>%
@@ -410,7 +445,6 @@ X651 <- pbl_books %>%
   ungroup() %>%
   unique() %>%
   full_join(.,pbl_books %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
-  mutate(X651 = ifelse(is.na(X651),"\\4$aPBL",paste("\\4$aPBL|",X651,sep = ""))) %>%
   arrange(rekord_id)
 
 #X655
@@ -469,12 +503,19 @@ X787 <- pbl_books %>%
   full_join(.,pbl_books %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
   arrange(rekord_id)
 
+#856
+X856 <- pbl_reviews_books %>% 
+  select(rekord_id=ks_id,rec_id,rec) %>% 
+  mutate(X856 = paste("42$uhttps://vufind-dev.ucl.cas.cz/Record/","pl",sprintf("%09d", rec_id),"$y","review: ",rec,"$4N",sep = "")) %>% 
+  full_join(pbl_books %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
+  select(rekord_id,X856) %>% 
+  arrange(rekord_id)
+
 #X964
 X964 <- pbl_books %>%
-  select(rekord_id,dzial) %>%
+  select(rekord_id) %>%
   unique() %>%
-  mutate(X964 = paste("\\\\$a",dzial,sep = "")) %>%
-  mutate(X964 = trim(str_replace(X964,"(.*)( - .$)","\\1"))) %>%
+  mutate(X964 = "\\4$aPBL") %>%
   select(rekord_id,X964)
 
 pbl_marc_books <- X005 %>%
@@ -498,6 +539,7 @@ pbl_marc_books <- X005 %>%
   full_join(.,X700,by = "rekord_id") %>%
   full_join(.,X710,by = "rekord_id") %>%
   full_join(.,X787,by = "rekord_id") %>%
+  full_join(.,X856,by = "rekord_id") %>%
   full_join(.,X964,by = "rekord_id") %>%
   cbind(.,LDR,X040,X001) %>%
   select(noquote(order(colnames(.))))
@@ -571,11 +613,8 @@ indeks_osobowy <- dbGetQuery(PBL,
 
 pbl_articles <- merge(pbl_articles,indeks_osobowy,by.x = "rekord_id",by.y = "ODI_ZA_ZAPIS_ID", all.x = TRUE)
 pbl_articles <- merge(pbl_articles,hasla_przekrojowe,by.x = "rekord_id", by.y = "HZ_ZA_ZAPIS_ID", all.x = TRUE)
-pbl_articles <- merge(pbl_articles,pbl_viaf,by.x = "tworca_id", by.y = "pbl_id", all.x = TRUE)
-pbl_articles <- pbl_articles %>%
-  mutate(tworca_imie = ifelse(is.na(tworca_id),NA,
-                              ifelse(is.na(viaf),as.character(tworca_imie),paste(tworca_imie,"$0",viaf,sep = "")))) %>%
-  arrange(rekord_id)
+pbl_articles <- merge(pbl_articles,pbl_viaf_names_dates,by.x = "tworca_id", by.y = "pbl_id", all.x = TRUE)
+
 ```
 
 ```{r final marc articles dataframe}
@@ -611,13 +650,14 @@ X040 <- "\\\\$aIBL$bpol"
 
 #X100
 X100 <- pbl_articles %>%
-  select(rekord_id,rodzaj_zapisu,tworca_nazwisko,tworca_imie,autor_nazwisko,autor_imie) %>%
+  select(rekord_id,rodzaj_zapisu,tworca_nazwisko,tworca_imie,autor_nazwisko,autor_imie,`$a`,`$d`,`$0`) %>%
   unique() %>%
-  mutate(tworca_nazwisko = ifelse(rodzaj_zapisu=="książka twórcy (podmiotowa)"&!is.na(tworca_nazwisko)&grepl(",",tworca_nazwisko)&tworca_imie=="*",as.character(autor_nazwisko),as.character(tworca_nazwisko)),
-         tworca_imie = ifelse(rodzaj_zapisu=="książka twórcy (podmiotowa)"&!is.na(tworca_nazwisko)&tworca_nazwisko==autor_nazwisko&tworca_imie=="*",as.character(autor_imie),as.character(tworca_imie)),
+  mutate(tworca_nazwisko = ifelse(rodzaj_zapisu %in% c("adaptacja utworów", "antologia w czasopiśmie", "listy", "proza", "tekst paraliteracki twórcy", "twórczość pozaliteracka", "wiersz")&!is.na(tworca_nazwisko)&grepl(",",tworca_nazwisko)&tworca_imie=="*",as.character(autor_nazwisko),as.character(tworca_nazwisko)),
+         tworca_imie = ifelse(rodzaj_zapisu %in% c("adaptacja utworów", "antologia w czasopiśmie", "listy", "proza", "tekst paraliteracki twórcy", "twórczość pozaliteracka", "wiersz")&!is.na(tworca_nazwisko)&tworca_nazwisko==autor_nazwisko&tworca_imie=="*",as.character(autor_imie),as.character(tworca_imie)),
          X100 = ifelse(is.na(tworca_nazwisko),NA,
-                       ifelse(rodzaj_zapisu=="książka twórcy (podmiotowa)",paste("1\\$a",tworca_nazwisko,", ",tworca_imie,"$4aut",sep = ""),
-                              ifelse(!is.na(autor_nazwisko),paste("1 $a",autor_nazwisko,", ",autor_imie,"$4aut",sep = ""),NA)))) %>%
+                       ifelse(rodzaj_zapisu %in% c("adaptacja utworów", "antologia w czasopiśmie", "listy", "proza", "tekst paraliteracki twórcy", "twórczość pozaliteracka", "wiersz")&nchar(paste(tworca_nazwisko,tworca_imie,sep = ", "))==nchar(`$a`)&as.character(str_extract_all(paste(tworca_nazwisko,tworca_imie,sep = ", "),"[:upper:]"))==as.character(str_extract_all(`$a`,"[:upper:]")), paste("1\\$a",`$a`,"$d",`$d`,"$4aut$0",`$0`,sep = ""),
+                              ifelse(rodzaj_zapisu %in% c("adaptacja utworów", "antologia w czasopiśmie", "listy", "proza", "tekst paraliteracki twórcy", "twórczość pozaliteracka", "wiersz"),paste("1\\$a",tworca_nazwisko,", ",tworca_imie,"$d",`$d`,"$4aut$0",`$0`,sep = ""),
+                                     ifelse(!is.na(autor_nazwisko),paste("1 $a",autor_nazwisko,", ",autor_imie,"$4aut",sep = ""),NA))))) %>%
   select(rekord_id,X100) %>%
   group_by(rekord_id) %>%
   mutate(X100 = paste(X100,collapse = "|")) %>%
@@ -713,6 +753,7 @@ X630 <- pbl_articles %>%
   select(rekord_id,HP_NAZWA,KH_NAZWA) %>%
   unique() %>% 
   inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.63"),by = c("HP_NAZWA","KH_NAZWA")) %>%
+  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.63"),by = c("dzial"="HP_NAZWA")) %>%
   mutate(X630 = trim(ifelse(!is.na(KH_NAZWA),paste("\\4$a",HP_NAZWA,", ",KH_NAZWA,sep = ""),paste("\\4$a",HP_NAZWA,sep = "")))) %>%
   select(rekord_id,X630) %>%
   group_by(rekord_id) %>%
@@ -727,6 +768,7 @@ X650 <- pbl_articles %>%
   select(rekord_id,HP_NAZWA,KH_NAZWA) %>%
   unique() %>% 
   inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.65"|MARC_FIELD=="24.65"),by = c("HP_NAZWA","KH_NAZWA")) %>%
+  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.65"|MARC_FIELD=="24.65"),by = c("dzial"="HP_NAZWA")) %>%
   mutate(X650 = trim(ifelse(MARC_FIELD=="4.65",
                             ifelse(!is.na(KH_NAZWA),paste("04$a",HP_NAZWA,", ",KH_NAZWA,sep = ""),paste("04$a",HP_NAZWA,sep = "")),
                        ifelse(MARC_FIELD=="24.65",
@@ -751,7 +793,6 @@ X651 <- pbl_articles %>%
   ungroup() %>%
   unique() %>%
   full_join(.,pbl_articles %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
-  mutate(X651 = ifelse(is.na(X651),"\\4$aPBL",paste("\\4$aPBL|",X651,sep = ""))) %>%
   arrange(rekord_id)
 
 #X655
@@ -804,13 +845,21 @@ X787 <- pbl_articles %>%
   full_join(.,pbl_articles %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
   arrange(rekord_id)
 
+#856
+X856 <- pbl_reviews_books %>% 
+  select(rekord_id=rec_id,ks_id,ks) %>% 
+  mutate(X856 = paste("42$uhttps://vufind-dev.ucl.cas.cz/Record/","pl",sprintf("%09d", ks_id),"$y","review of: ",ks,"$4N",sep = "")) %>% 
+  full_join(pbl_articles %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
+  select(rekord_id,X856) %>% 
+  arrange(rekord_id)
+
 #X964
 X964 <- pbl_articles %>%
-  select(rekord_id,dzial) %>%
+  select(rekord_id) %>%
   unique() %>%
-  mutate(X964 = paste("\\\\$a",dzial,sep = "")) %>%
-  mutate(X964 = trim(str_replace(X964,"(.*)( - .$)","\\1"))) %>%
+  mutate(X964 = "\\4$aPBL") %>%
   select(rekord_id,X964)
+
 #XLKR
 XLKR <- dbGetQuery(PBL,
                    "select z.za_zapis_id \"rekord_id\", z.za_za_zapis_id \"XLKR\"
@@ -835,6 +884,7 @@ pbl_marc_articles <- X005 %>%
   full_join(.,X700,by = "rekord_id") %>%
   full_join(.,X773,by = "rekord_id") %>%
   full_join(.,X787,by = "rekord_id") %>%
+  full_join(.,X856,by = "rekord_id") %>%
   full_join(.,X964,by = "rekord_id") %>%
   full_join(.,XLKR,by = "rekord_id") %>%
   cbind(.,LDR,X040,X001) %>%

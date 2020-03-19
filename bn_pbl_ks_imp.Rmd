@@ -9,22 +9,21 @@ Przed rozpoczęciem pracy wyszukaj frazy "bezpiecznik" i "aktualizacja".
 ```{r Wczytanie plików}
 #install.packages(c("utf8","googlesheets4","zoo","stringr","splitstackshape","plyr","dplyr","sqldf","stringdist","fuzzyjoin","data.table","svMisc","tidyverse","RJDBC","arrangements","tokenizers","openxlsx","jsonlite","pacman"))
 #devtools::install_github("r-lib/gargle")
-
+employee_name <- readline(prompt="Enter name: ")
+import_year <- readline(prompt="Enter year: ")
 #biblioteki
 options(java.parameters = "-Xmx32000m")
 options(scipen = 999)
 pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,arrangements,tokenizers,openxlsx,jsonlite)
 `%notin%` <- Negate(`%in%`)
 #połączenie z bazą PBL
-jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/Cezary/Downloads/ojdbc6.jar")
+jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath=paste("C:/Users/",employee_name,"/Downloads/ojdbc6.jar",sep = ""))
 PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "IBL_SELECT", "CR333444")
 
 #wgranie zbiorów książek
-#aktualizacja - wprowadź właściwą ścieżkę pliku (zmień rok)
-bn_ks <- read.csv2("C:/Users/Cezary/Downloads/bn_ks_2012.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
+bn_ks <- read.csv2(paste("C:/Users/",employee_name,"/Downloads/bn_ks_",import_year,".csv",sep = ""), encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
   mutate(rok = str_sub(X008,8,11)) %>% 
-  #aktualizacja - wprowadź do filtra właściwy rok
-  filter(rok == 2012,
+  filter(rok == import_year,
          !grepl("\\\\$aArtykuły|\\\\$Druki ulotne",X380),
          !grepl("\\$aNadbitki i odbitki",X655),
          grepl("Książki",X380,ignore.case = FALSE)|X380=="",
@@ -964,8 +963,7 @@ na_pozniej <- bn_ok %>%
 #   mutate(lata = ifelse(grepl("\\d{2}-",X100),str_replace(X100,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA),
 #          lata_temat = ifelse(grepl("\\d{2}-",X600),str_replace(X600,"(.*\\$d\\(.*?)(\\d{2,4})(\\?{0,1}-.*)","\\2"),NA)) %>%
 # filter((is.na(lata)&is.na(lata_temat))|!(as.integer(lata)<1800)|!(as.integer(lata_temat)<1800))
-#aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(na_pozniej, "C:/Users/Cezary/Desktop/bn_2012_ks_na_pozniej.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(na_pozniej, paste("C:/Users/",employee_name,"/Desktop/bn_",import_year,"_ks_na_pozniej.csv",sep = ""), row.names = F, na = '', fileEncoding = 'UTF-8')
 
 bn_ok <- sqldf("select *
                from bn_ok a
@@ -3797,8 +3795,7 @@ automatyczny_IOK <- polaczone %>%
   unique() %>%
   filter(rekord_BN %notin% data$ZA_UWAGI[data$czy_automatycznie=="nie"]) %>%
   mutate(powinno_byc = "IOK")
-#aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.csv2(automatyczny_IOK, "C:/Users/Cezary/Desktop/imp_2012_automatyczne_podmiotowe.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(automatyczny_IOK, paste("C:/Users/",employee_name,"/Desktop/imp_",import_year,"_automatyczne_podmiotowe.csv",sep = ""), row.names = F, na = '', fileEncoding = 'UTF-8')
 
 out <- cSplit(polaczone, c("am_autor_id", "am_nazwisko", "am_imie","os_osoba_id","os_nazwisko", "os_imie", "fo_symbol","wy_wydawnictwo_id","wy_miejsce","wy_nazwa"),sep = "|",direction = "long") %>%
   unique()
@@ -3900,14 +3897,13 @@ out <- out %>%
   fill(podzial)
 ile <- unique(out$podzial)
 ile <- split(unique(ile), ceiling(seq_along(unique(ile))/1500))
-#aktualizacja - wpisz właściwy rok w ścieżkę pliku
 x <- 1:length(ile)
 for (i in x) {
   progress(match(i,x), max.value = length(x))
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2012_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/",employee_name,"/Desktop/",import_year,"_podmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -5006,14 +5002,13 @@ out <- out %>%
   fill(podzial)
 ile <- unique(out$podzial)
 ile <- split(unique(ile), ceiling(seq_along(unique(ile))/1500))
-#aktualizacja - wpisz właściwy rok w ścieżkę pliku
 x <- 1:length(ile)
 for (i in x) {
   progress(match(i,x), max.value = length(x))
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2012_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/",employee_name,"/Desktop/",import_year,"_przedmiotowa_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -5219,6 +5214,7 @@ for (i in x) {
   marc_field_246[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_246$X246),str_replace_all(gsub(string,"\\3",marc_field_246$X246),"\\${2}.", "~"),NA)
 }
 
+if("$n" %in% colnames(marc_field_245)) {
 marc_field_246 <- marc_field_246 %>%
  filter(grepl("oryg",X246)) %>%
  select(ZA_UWAGI,`$a`,`$b`,`$n`,`$p`) %>%
@@ -5243,6 +5239,30 @@ marc_field_246 <- marc_field_246 %>%
         X246 = str_replace_all(X246,"\\.{3} \\.{3}","... "),
         X246 = gsub("( : )(.)",". \\U\\2",perl=TRUE,X246)) %>%
  select(ZA_UWAGI, X246)
+} else {
+  marc_field_246 <- marc_field_246 %>%
+ filter(grepl("oryg",X246)) %>%
+ select(ZA_UWAGI,`$a`,`$b`) %>%
+ group_by(ZA_UWAGI) %>%
+ mutate(`$a` = paste(ifelse(is.na(`$a`),"",as.character(`$a`)),collapse = ", "),
+        `$b` = paste(ifelse(is.na(`$b`),"",as.character(`$b`)),collapse = "")) %>%
+ ungroup() %>%
+ unique() %>%
+ unite("X246",`$a`:`$b`,sep = " ",na.rm = TRUE) %>%
+ mutate(X246 = str_replace_all(X246," +"," "),
+        X246 = str_remove(X246, "\\s+\\/\\s{0,}$"),
+        X246 = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,X246),
+                          ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",X246),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,X246),
+                                 ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)","\\1.\\2\\U\\5",perl = TRUE,X246),
+                                        ifelse(grepl("(\\W)( )(:|;)( )(.)",X246),gsub("(\\W)( )(:|;)( )(.)","\\1\\2\\U\\5",perl = TRUE,X246),as.character(X246))))),
+        X246 = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,X246),
+                          ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",X246),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,X246),
+                                 ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)","\\1.\\2\\U\\5",perl = TRUE,X246),
+                                        ifelse(grepl("(\\W)( )(:|;)( ){0,1}(.)",X246),gsub("(\\W)( )(:|;)( ){0,1}(.)","\\1\\2\\U\\5",perl = TRUE,X246),as.character(X246))))),
+        X246 = str_replace_all(X246,"\\.{3} \\.{3}","... "),
+        X246 = gsub("( : )(.)",". \\U\\2",perl=TRUE,X246)) %>%
+ select(ZA_UWAGI, X246)
+}
 
 #pole 500
 marc_field_500 <- data %>%
@@ -6085,14 +6105,13 @@ out <- out %>%
   fill(podzial)
 ile <- unique(out$podzial)
 ile <- split(unique(ile), ceiling(seq_along(unique(ile))/1500))
-#aktualizacja - wpisz właściwy rok w ścieżkę pliku
 x <- 1:length(ile)
 for (i in x) {
   progress(match(i,x), max.value = length(x))
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2012_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/",employee_name,"/Desktop/",import_year,"_antologie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -7052,14 +7071,13 @@ out <- out %>%
   fill(podzial)
 ile <- unique(out$podzial)
 ile <- split(unique(ile), ceiling(seq_along(unique(ile))/1500))
-#aktualizacja - wpisz właściwy rok w ścieżkę pliku
 x <- 1:length(ile)
 for (i in x) {
   progress(match(i,x), max.value = length(x))
   final <- out %>%
     filter(podzial %in% ile[[i]]) %>%
     select(-podzial)
-  write.xlsx(final, paste("C:/Users/Cezary/Desktop/2012_wspolwydanie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
+  write.xlsx(final, paste("C:/Users/",employee_name,"/Desktop/",import_year,"_wspolwydanie_do_importu",i,".xlsx",sep = ""),sheetName = "gotowe")
 }
 ```
 
@@ -7075,23 +7093,22 @@ Najpierw należy przeprowadzić import do bazy, a następnie egzekwować poniżs
 
 ```{r przygotowanie plików do masowego nadpisania statusu IOK}
 #automatyczny IOK dla rekordów bibliograficznych
-#aktualizacja - wpisz właściwy rok w ścieżkę pliku
 
-nadpisanie_zapisow_IOK <- read.csv2("C:/Users/Cezary/Desktop/imp_2012_automatyczne_podmiotowe.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE)
+nadpisanie_zapisow_IOK <- read.csv2(paste("C:/Users/",employee_name,"/Desktop/imp_",import_year,"_automatyczne_podmiotowe.csv",sep = ""), encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE)
 
-#aktualizacja - wpisać w selekcie dla za_uwagi właściwą frazę dla rocznika, np. 'BN: 2009%'
 nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
   mutate(rekord_BN = as.character(rekord_BN)) %>% 
   left_join(.,dbGetQuery(PBL,
                              "select z.za_zapis_id, z.za_status_imp, z.za_uwagi
                               from pbl_zapisy z
-                              where za_uwagi like 'BN: 2012%'
+                              where za_uwagi like 'BN: %'
                               and z.za_url_bn is not null") %>% mutate(ZA_UWAGI = str_extract(ZA_UWAGI,"(?<=BN: )(.*?)(?=, import)")),by=c("rekord_BN"="ZA_UWAGI")) %>% 
+  filter(grepl(paste("^BN\\: ",import_year, sep = ""),rekord_BN)) %>% 
   rename(jest = ZA_STATUS_IMP) %>% 
   mutate(ID2 = NA) %>% 
   select(ZA_ZAPIS_ID,ID2,jest,powinno_byc)
-#aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Cezary/Desktop/2012_nadpisanie_zapisow_IOK.xlsx",sheetName = "ZA_STATUS_IMP")
+
+write.xlsx(nadpisanie_zapisow_IOK, paste("C:/Users/",employee_name,"/Desktop/",import_year,"_nadpisanie_zapisow_IOK.xlsx",sep = ""),sheetName = "ZA_STATUS_IMP")
 
 #bezpiecznik
 #automatyczny IOK dla nowych twórców w kartotece powinien zostać przeprowadzony z poziomu importera
@@ -7108,19 +7125,20 @@ write.xlsx(nadpisanie_zapisow_IOK, "C:/Users/Cezary/Desktop/2012_nadpisanie_zapi
 #po tym przygotować na dysku unikatowe linki
 bn_ok <- chunk11
 kolejnosc <- c("pracownik","ZA_ZAPIS_ID","typ_ksiazki","link","link_1","rok","status","blad_w_imporcie_tytulu","X100","X245","X650","X655","X246","X250","X260","X300","X380","X490","X500","X501","X546","X600","X700","X041","X080")
-#aktualizacja - wpisać w selekcie dla za_uwagi właściwą frazę dla rocznika, np. 'BN: 2010%'
+
 rocznik_pbl_po_imporcie <- dbGetQuery(PBL,
                                        "select z.za_zapis_id, z.za_status_imp, z.za_uwagi
                                         from pbl_zapisy z
-                                        where za_uwagi like 'BN: 2012%'
+                                        where za_uwagi like 'BN: %'
                                         and z.za_url_bn is not null") %>% 
+  filter(grepl(paste("^BN\\: ",import_year, sep = ""),ZA_UWAGI)) %>% 
   mutate(ZA_UWAGI = str_extract(ZA_UWAGI,"(?<=BN: )(.*?)(?=, import)")) %>%
   rename(status = ZA_STATUS_IMP) %>% 
   left_join(.,bn_ok %>% select(pracownik = redaktor_dzialu,typ_ksiazki = rodzaj_ksiazki,link = BN_URL, rok, X100, X245, X650, X655, X246, X250, X260, X300, X380, X490, X500, X501, X546, X600, X700, X041, X080,ZA_UWAGI) %>% mutate(link_1 = paste("=HYPERLINK(\"",link,"\";\"link do książki w BN\")",sep = ""), blad_w_imporcie_tytulu = FALSE),by="ZA_UWAGI") %>% 
   select(noquote(kolejnosc))
 rocznik_pbl_po_imporcie$pracownik[rocznik_pbl_po_imporcie$status=="IOK"] <- "AUTOMAT"
-#aktualizacja - wpisz właściwy rok w ścieżkę pliku
-write.xlsx(rocznik_pbl_po_imporcie, "C:/Users/Cezary/Desktop/ks_BN_2012_listy_pracowników.xlsx",sheetName = "lista_ksiazek")
+
+write.xlsx(rocznik_pbl_po_imporcie, paste("C:/Users/",employee_name,"/Desktop/ks_BN_",import_year,"_listy_pracowników.xlsx",sep = ""),sheetName = "lista_ksiazek")
 #utwórz nowy podfolder w folderze importu BN i prześlij listę na dysk, przygotuj widoki filtrów dla wszystkich osób i roześlij unikatowe linki
 ```
 
@@ -7222,7 +7240,7 @@ pbl_bn_viaf_import <- pbl_bn_viaf_import %>%
   unique()
 
 #zapisać plik i jego treść wkleić na dysk do tabeli "mapowanie_osob_bn_pbl_po_imporcie"
-write.xlsx(pbl_bn_viaf_import, "C:/Users/Cezary/Desktop/relacje_osobowe_pbl_bn.xlsx",sheetName = "pbl-bn")
+write.xlsx(pbl_bn_viaf_import, paste("C:/Users/",employee_name,"/Desktop/relacje_osobowe_pbl_bn.xlsx",sep = ""),sheetName = "pbl-bn")
 #następnie przeanalizować zawartość wkejonej części i zostawić "tak" w kolumnie F tylko dla poprawnych utożsamień (osoba w PBL to osoba w BN)
 ```
 
