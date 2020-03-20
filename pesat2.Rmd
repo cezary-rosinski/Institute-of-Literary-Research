@@ -9,6 +9,15 @@ options(scipen = 999)
 pacman::p_load(googlesheets4,zoo,openxlsx,stringr,splitstackshape,plyr,dplyr,sqldf,stringdist,fuzzyjoin,data.table,svMisc,tidyverse,RJDBC,xlsx,magrittr,jsonlite,openxlsx,xml2,XML)
 trim <- function (x) gsub("^\\s+|\\s+$", "", x)
 pbl_hp <- read.csv2("C:/Users/Cezary/Downloads/pbl_subject_headings.csv", encoding = "Windows-1250", header = TRUE, stringsAsFactors = FALSE)
+pbl_marc_roles <- sheets_read(ss = "1iQ4JGo1hLWZbQX4u2kB8LwqSWMLwicFfBsVFc9MNUUk", sheet = "pbl-marc") %>% 
+  filter(!is.na(MARC_ABBREVIATION)) %>% 
+  select(PBL_NAZWA, MARC_ABBREVIATION) %>% 
+  mutate(MARC_ABBREVIATION = paste("$4", MARC_ABBREVIATION, sep = "")) %>% 
+  group_by(PBL_NAZWA) %>% 
+  mutate(MARC_ABBREVIATION = paste(MARC_ABBREVIATION,collapse = "|")) %>% 
+  ungroup() %>% 
+  unique()
+  
 
 #połączenie z bazą PBL
 #jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="C:/Users/cezar/Documents/R/ojdbc6.jar")
@@ -150,7 +159,8 @@ indeks_osobowy <- dbGetQuery(PBL,
 
 pbl_books <- merge(pbl_books,indeks_osobowy,by.x = "rekord_id",by.y = "ODI_ZA_ZAPIS_ID", all.x = TRUE)
 pbl_books <- merge(pbl_books,hasla_przekrojowe,by.x = "rekord_id", by.y = "HZ_ZA_ZAPIS_ID", all.x = TRUE)
-pbl_books <- merge(pbl_books,pbl_viaf_names_dates,by.x = "tworca_id", by.y = "pbl_id", all.x = TRUE) %>%
+pbl_books <- merge(pbl_books,pbl_viaf_names_dates,by.x = "tworca_id", by.y = "pbl_id", all.x = TRUE) 
+pbl_books <- merge(pbl_books, pbl_marc_roles, by.x = "funkcja_osoby", by.y = "PBL_NAZWA", all.x = TRUE) %>%
   arrange(rekord_id)
 ```
 
@@ -210,7 +220,6 @@ pbl_reviews_books <- dbGetQuery(PBL,
 ```
 
 ```{r final marc books dataframe}
-pbl_books <- read.csv2("C:/Users/Cezary/Desktop/cz_books.csv", encoding = "Windows-1250", header = TRUE, stringsAsFactors = FALSE)
 #empty data.frame
 pbl_marc <- data.frame(LDR = character(), X001 = character(), X590 = character(), X964 = character(), X100 = character(), X600 = character(), X245 = character(), X700 = character(), X520 = character(), X240 = character(), X300 = character(), X250 = character(), X710 = character(), X490 = character(), X610 = character(), X630 = character(), X787 = character(), X650 = character(), X651 = character(), X655 = character(),  X611 = character(), X264 = character(), stringsAsFactors=FALSE) %>%
   select(noquote(order(colnames(.))))
@@ -354,13 +363,14 @@ X590 <- pbl_books %>%
 
 #X600
 X600 <- pbl_books %>%
-  select(rekord_id,rodzaj_zapisu,tworca_nazwisko,tworca_imie) %>%
+  select(rekord_id,rodzaj_zapisu,tworca_nazwisko,tworca_imie,`$a`,`$d`,`$0`) %>%
   unique() %>%
   filter(rodzaj_zapisu=="książka o twórcy (przedmiotowa)") %>%
   mutate(tworca_nazwisko = ifelse(!is.na(tworca_nazwisko)&grepl(",",tworca_nazwisko)&tworca_imie=="*",str_replace_all(tworca_nazwisko,",","|"),as.character(tworca_nazwisko)),
          tworca_imie = ifelse(!is.na(tworca_nazwisko)&tworca_imie=="*","",as.character(tworca_imie))) %>%
   cSplit(.,"tworca_nazwisko",sep = "|",direction = "long") %>%
-  mutate(X600 = trim(ifelse(tworca_imie!="",paste("14$a",tworca_nazwisko,", ",tworca_imie,sep = ""),paste("14$a",tworca_nazwisko,sep = "")))) %>%
+  mutate(X600 = trim(ifelse(nchar(paste(tworca_nazwisko,tworca_imie,sep = ", "))==nchar(`$a`)&as.character(str_extract_all(paste(tworca_nazwisko,tworca_imie,sep = ", "),"[:upper:]"))==as.character(str_extract_all(`$a`,"[:upper:]")), paste("14$a",`$a`,"$d",`$d`,"$0",`$0`,sep = ""),
+                       ifelse(tworca_imie!="",paste("14$a",tworca_nazwisko,", ",tworca_imie,"$d",`$d`,"$0",`$0`,sep = ""),paste("14$a",tworca_nazwisko,sep = ""))))) %>%
   select(rekord_id,X600) %>%
   group_by(rekord_id) %>%
   mutate(X600 = paste(X600,collapse = "|")) %>%
@@ -399,26 +409,43 @@ X611 <- pbl_books %>%
   arrange(rekord_id)
 
 #X630
-X630 <- pbl_books %>%
+X630a <- pbl_books %>%
   select(rekord_id,HP_NAZWA,KH_NAZWA) %>%
   unique() %>% 
-  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.63"),by = c("HP_NAZWA","KH_NAZWA")) %>%
-  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.63"),by = c("dzial"="HP_NAZWA")) %>%
+  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.63"),by = c("HP_NAZWA","KH_NAZWA")) %>% 
   mutate(X630 = trim(ifelse(!is.na(KH_NAZWA),paste("\\4$a",HP_NAZWA,", ",KH_NAZWA,sep = ""),paste("\\4$a",HP_NAZWA,sep = "")))) %>%
   select(rekord_id,X630) %>%
   group_by(rekord_id) %>%
   mutate(X630 = paste(X630,collapse = "|")) %>%
   ungroup() %>%
-  unique() %>%
-  full_join(.,pbl_books %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
+  unique()
+
+X630b <- pbl_books %>%
+  select(rekord_id,dzial) %>%
+  mutate(dzial = str_replace(dzial, "(.*?)( - [:upper:]$)","\\1")) %>% 
+  unique() %>% 
+  inner_join(.,pbl_hp %>% select(HP_NAZWA, MARC_FIELD) %>% filter(MARC_FIELD=="4.63"),by = c("dzial"="HP_NAZWA")) %>% 
+  mutate(X630 = trim(paste("\\4$a", dzial, sep = ""))) %>% 
+  select(rekord_id,X630) %>%
+  group_by(rekord_id) %>%
+  mutate(X630 = paste(X630,collapse = "|")) %>%
+  ungroup() %>%
+  unique()
+
+X630 <- X630a %>% 
+  bind_rows(X630b) %>% 
+  group_by(rekord_id) %>% 
+  mutate(X630 = paste(unique(X630), collapse = "|")) %>% 
+  ungroup() %>% 
+  unique() %>% 
+  full_join(pbl_books %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
   arrange(rekord_id)
 
 #X650
-X650 <- pbl_books %>%
-  select(rekord_id,HP_NAZWA,KH_NAZWA,dzial) %>%
+X650a <- pbl_books %>%
+  select(rekord_id,HP_NAZWA,KH_NAZWA) %>%
   unique() %>% 
-  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.65"|MARC_FIELD=="24.65"),by = c("HP_NAZWA","KH_NAZWA")) %>%
-  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.65"|MARC_FIELD=="24.65"),by = c("dzial"="HP_NAZWA")) %>%
+  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.65"|MARC_FIELD=="24.65"),by = c("HP_NAZWA","KH_NAZWA")) %>% 
   mutate(X650 = trim(ifelse(MARC_FIELD=="4.65",
                             ifelse(!is.na(KH_NAZWA),paste("04$a",HP_NAZWA,", ",KH_NAZWA,sep = ""),paste("04$a",HP_NAZWA,sep = "")),
                        ifelse(MARC_FIELD=="24.65",
@@ -427,12 +454,29 @@ X650 <- pbl_books %>%
   group_by(rekord_id) %>%
   mutate(X650 = paste(X650,collapse = "|")) %>%
   ungroup() %>%
-  unique() %>%
+  unique()
+
+X650b <- pbl_books %>%
+  select(rekord_id,dzial) %>%
+  mutate(dzial = str_replace(dzial, "(.*?)( - [:upper:]$)","\\1")) %>% 
+  unique() %>% 
+  inner_join(.,pbl_hp %>% select(HP_NAZWA, MARC_FIELD) %>% filter(MARC_FIELD=="4.65"),by = c("dzial"="HP_NAZWA")) %>% 
+  mutate(X650 = trim(paste("04$a", dzial, sep = ""))) %>% 
+  select(rekord_id,X650) %>%
+  group_by(rekord_id) %>%
+  mutate(X650 = paste(X650,collapse = "|")) %>%
+  ungroup() %>%
+  unique()
+
+X650 <- X650a %>% 
+  bind_rows(X650b) %>% 
+  group_by(rekord_id) %>% 
+  mutate(X650 = paste(X650, collapse = "|")) %>% 
+  ungroup() %>% 
+  unique() %>% 
   full_join(.,pbl_books %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
   arrange(rekord_id)
-
-mutate(X964 = trim(str_replace(X964,"(.*)( - .$)","\\1")))
-
+  
 #X651
 X651 <- pbl_books %>%
   select(rekord_id,HP_NAZWA,KH_NAZWA) %>%
@@ -466,9 +510,9 @@ X655 <- pbl_books %>%
 
 #X700
 X700 <- pbl_books %>%
-  select(rekord_id,funkcja_osoby,wspoltworca_nazwisko,wspoltworca_imie) %>%
+  select(rekord_id,funkcja_osoby,wspoltworca_nazwisko,wspoltworca_imie,MARC_ABBREVIATION) %>%
   unique() %>%
-  mutate(X700 = trim(ifelse(is.na(wspoltworca_nazwisko),"",paste("1\\$a",wspoltworca_nazwisko,", ",wspoltworca_imie,"$e",funkcja_osoby,sep = "")))) %>%
+  mutate(X700 = trim(ifelse(is.na(wspoltworca_nazwisko),"",paste("1\\$a",wspoltworca_nazwisko,", ",wspoltworca_imie,"$e",funkcja_osoby, ifelse(!is.na(MARC_ABBREVIATION),as.character(MARC_ABBREVIATION),""), sep = "")))) %>%
   select(rekord_id,X700) %>%
   rbind(X100 %>% select(rekord_id,X700) %>% cSplit(.,"X700",sep = "|",direction = "long"),.) %>%
   arrange(rekord_id) %>%
@@ -481,6 +525,8 @@ X700 <- pbl_books %>%
   arrange(rekord_id)
 X100 <- X100 %>%
   select(rekord_id,X100)
+
+count <- as.data.frame(table(X700$rekord_id))
   
 #710
 X710 <- pbl_books %>%
@@ -503,12 +549,16 @@ X787 <- pbl_books %>%
   full_join(.,pbl_books %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
   arrange(rekord_id)
 
-#856
+#X856
 X856 <- pbl_reviews_books %>% 
   select(rekord_id=ks_id,rec_id,rec) %>% 
   mutate(X856 = paste("42$uhttps://vufind-dev.ucl.cas.cz/Record/","pl",sprintf("%09d", rec_id),"$y","review: ",rec,"$4N",sep = "")) %>% 
-  full_join(pbl_books %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
   select(rekord_id,X856) %>% 
+  group_by(rekord_id) %>%
+  mutate(X856 = paste(X856,collapse = "|")) %>%
+  ungroup() %>%
+  unique() %>%
+  right_join(pbl_books %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
   arrange(rekord_id)
 
 #X964
@@ -614,6 +664,8 @@ indeks_osobowy <- dbGetQuery(PBL,
 pbl_articles <- merge(pbl_articles,indeks_osobowy,by.x = "rekord_id",by.y = "ODI_ZA_ZAPIS_ID", all.x = TRUE)
 pbl_articles <- merge(pbl_articles,hasla_przekrojowe,by.x = "rekord_id", by.y = "HZ_ZA_ZAPIS_ID", all.x = TRUE)
 pbl_articles <- merge(pbl_articles,pbl_viaf_names_dates,by.x = "tworca_id", by.y = "pbl_id", all.x = TRUE)
+pbl_articles <- merge(pbl_articles, pbl_marc_roles, by.x = "funkcja_osoby", by.y = "PBL_NAZWA", all.x = TRUE) %>%
+  arrange(rekord_id)
 
 ```
 
@@ -702,7 +754,7 @@ X520 <- pbl_articles %>%
 
 #X600
 X600 <- pbl_articles %>%
-  select(rekord_id,ZA_TYPE,tworca_nazwisko,tworca_imie) %>%
+  select(rekord_id,ZA_TYPE,tworca_nazwisko,tworca_imie,`$a`,`$d`,`$0`) %>%
   unique() %>%
   filter(ZA_TYPE=="IZA") %>%
   mutate(tworca_nazwisko = ifelse(is.na(tworca_nazwisko),"",
@@ -710,7 +762,8 @@ X600 <- pbl_articles %>%
          tworca_imie = ifelse(is.na(tworca_imie),"",
                               ifelse(!is.na(tworca_nazwisko)&tworca_imie=="*","",as.character(tworca_imie)))) %>%
   cSplit(.,"tworca_nazwisko",sep = "|",direction = "long") %>%
-  mutate(X600 = trim(ifelse(tworca_imie!="",paste("14$a",tworca_nazwisko,", ",tworca_imie,sep = ""),paste("14$a",tworca_nazwisko,sep = "")))) %>%
+  mutate(X600 = trim(ifelse(nchar(paste(tworca_nazwisko,tworca_imie,sep = ", "))==nchar(`$a`)&as.character(str_extract_all(paste(tworca_nazwisko,tworca_imie,sep = ", "),"[:upper:]"))==as.character(str_extract_all(`$a`,"[:upper:]")), paste("14$a",`$a`,"$d",`$d`,"$0",`$0`,sep = ""),
+                       ifelse(tworca_imie!="",paste("14$a",tworca_nazwisko,", ",tworca_imie,"$d",`$d`,"$0",`$0`,sep = ""),paste("14$a",tworca_nazwisko,sep = ""))))) %>%
   select(rekord_id,X600) %>%
   group_by(rekord_id) %>%
   mutate(X600 = paste(X600,collapse = "|")) %>%
@@ -749,26 +802,43 @@ X611 <- pbl_articles %>%
   arrange(rekord_id)
 
 #X630
-X630 <- pbl_articles %>%
+X630a <- pbl_articles %>%
   select(rekord_id,HP_NAZWA,KH_NAZWA) %>%
   unique() %>% 
-  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.63"),by = c("HP_NAZWA","KH_NAZWA")) %>%
-  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.63"),by = c("dzial"="HP_NAZWA")) %>%
+  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.63"),by = c("HP_NAZWA","KH_NAZWA")) %>% 
   mutate(X630 = trim(ifelse(!is.na(KH_NAZWA),paste("\\4$a",HP_NAZWA,", ",KH_NAZWA,sep = ""),paste("\\4$a",HP_NAZWA,sep = "")))) %>%
   select(rekord_id,X630) %>%
   group_by(rekord_id) %>%
   mutate(X630 = paste(X630,collapse = "|")) %>%
   ungroup() %>%
-  unique() %>%
-  full_join(.,pbl_articles %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
+  unique()
+
+X630b <- pbl_articles %>%
+  select(rekord_id,dzial) %>%
+  mutate(dzial = str_replace(dzial, "(.*?)( - [:upper:]$)","\\1")) %>% 
+  unique() %>% 
+  inner_join(.,pbl_hp %>% select(HP_NAZWA, MARC_FIELD) %>% filter(MARC_FIELD=="4.63"),by = c("dzial"="HP_NAZWA")) %>% 
+  mutate(X630 = trim(paste("\\4$a", dzial, sep = ""))) %>% 
+  select(rekord_id,X630) %>%
+  group_by(rekord_id) %>%
+  mutate(X630 = paste(X630,collapse = "|")) %>%
+  ungroup() %>%
+  unique()
+
+X630 <- X630a %>% 
+  bind_rows(X630b) %>% 
+  group_by(rekord_id) %>% 
+  mutate(X630 = paste(unique(X630), collapse = "|")) %>% 
+  ungroup() %>% 
+  unique() %>% 
+  full_join(pbl_articles %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
   arrange(rekord_id)
 
 #X650
-X650 <- pbl_articles %>%
+X650a <- pbl_articles %>%
   select(rekord_id,HP_NAZWA,KH_NAZWA) %>%
   unique() %>% 
-  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.65"|MARC_FIELD=="24.65"),by = c("HP_NAZWA","KH_NAZWA")) %>%
-  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.65"|MARC_FIELD=="24.65"),by = c("dzial"="HP_NAZWA")) %>%
+  inner_join(.,pbl_hp %>% filter(MARC_FIELD=="4.65"|MARC_FIELD=="24.65"),by = c("HP_NAZWA","KH_NAZWA")) %>% 
   mutate(X650 = trim(ifelse(MARC_FIELD=="4.65",
                             ifelse(!is.na(KH_NAZWA),paste("04$a",HP_NAZWA,", ",KH_NAZWA,sep = ""),paste("04$a",HP_NAZWA,sep = "")),
                        ifelse(MARC_FIELD=="24.65",
@@ -777,7 +847,26 @@ X650 <- pbl_articles %>%
   group_by(rekord_id) %>%
   mutate(X650 = paste(X650,collapse = "|")) %>%
   ungroup() %>%
-  unique() %>%
+  unique()
+
+X650b <- pbl_articles %>%
+  select(rekord_id,dzial) %>%
+  mutate(dzial = str_replace(dzial, "(.*?)( - [:upper:]$)","\\1")) %>% 
+  unique() %>% 
+  inner_join(.,pbl_hp %>% select(HP_NAZWA, MARC_FIELD) %>% filter(MARC_FIELD=="4.65"),by = c("dzial"="HP_NAZWA")) %>% 
+  mutate(X650 = trim(paste("04$a", dzial, sep = ""))) %>% 
+  select(rekord_id,X650) %>%
+  group_by(rekord_id) %>%
+  mutate(X650 = paste(X650,collapse = "|")) %>%
+  ungroup() %>%
+  unique()
+
+X650 <- X650a %>% 
+  bind_rows(X650b) %>% 
+  group_by(rekord_id) %>% 
+  mutate(X650 = paste(X650, collapse = "|")) %>% 
+  ungroup() %>% 
+  unique() %>% 
   full_join(.,pbl_articles %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
   arrange(rekord_id)
 
@@ -804,9 +893,9 @@ X655 <- pbl_articles %>%
   
 #X700
 X700 <- pbl_articles %>%
-  select(rekord_id,funkcja_osoby,wspoltworca_nazwisko,wspoltworca_imie) %>%
+  select(rekord_id,funkcja_osoby,wspoltworca_nazwisko,wspoltworca_imie,MARC_ABBREVIATION) %>%
   unique() %>%
-  mutate(X700 = trim(ifelse(is.na(wspoltworca_nazwisko),"",paste("1\\$a",wspoltworca_nazwisko,", ",wspoltworca_imie,"$e",funkcja_osoby,sep = "")))) %>%
+  mutate(X700 = trim(ifelse(is.na(wspoltworca_nazwisko),"",paste("1\\$a",wspoltworca_nazwisko,", ",wspoltworca_imie,"$e",funkcja_osoby, ifelse(!is.na(MARC_ABBREVIATION),as.character(MARC_ABBREVIATION),""), sep = "")))) %>%
   select(rekord_id,X700) %>%
   rbind(X100 %>% select(rekord_id,X700) %>% cSplit(.,"X700",sep = "|",direction = "long"),.) %>%
   arrange(rekord_id) %>%
@@ -845,12 +934,16 @@ X787 <- pbl_articles %>%
   full_join(.,pbl_articles %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
   arrange(rekord_id)
 
-#856
+#X856
 X856 <- pbl_reviews_books %>% 
   select(rekord_id=rec_id,ks_id,ks) %>% 
   mutate(X856 = paste("42$uhttps://vufind-dev.ucl.cas.cz/Record/","pl",sprintf("%09d", ks_id),"$y","review of: ",ks,"$4N",sep = "")) %>% 
-  full_join(pbl_articles %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
   select(rekord_id,X856) %>% 
+  group_by(rekord_id) %>%
+  mutate(X856 = paste(X856,collapse = "|")) %>%
+  ungroup() %>%
+  unique() %>%
+  right_join(pbl_articles %>% select(rekord_id) %>% unique(),by = "rekord_id") %>%
   arrange(rekord_id)
 
 #X964
@@ -889,7 +982,7 @@ pbl_marc_articles <- X005 %>%
   full_join(.,XLKR,by = "rekord_id") %>%
   cbind(.,LDR,X040,X001) %>%
   select(noquote(order(colnames(.))))
-
+#write.csv2(pbl_marc_articles, file = "C:/Users/Cezary/Desktop/pbl_marc_articles.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 long <- reshape(pbl_marc_articles,
                 direction = "long",
                 varying = list(names(pbl_marc_articles)[-2]),
