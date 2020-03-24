@@ -6323,7 +6323,7 @@ marc_field_246 <- marc_field_246[, colSums(is.na(marc_field_246)) != nrow(marc_f
          X246 = str_replace_all(X246,"\\.{3} \\.{3}","... "),
          X246 = gsub("( : )(.)",". \\U\\2",perl=TRUE,X246)) %>%
   select(ZA_UWAGI, X246)
-} else {
+} else if ("$b" %in% colnames(marc_field_246)){
   marc_field_246 <- marc_field_246[, colSums(is.na(marc_field_246)) != nrow(marc_field_246)] %>%
   filter(grepl("oryg",X246)) %>%
   select(ZA_UWAGI,`$a`,`$b`) %>%
@@ -6333,6 +6333,28 @@ marc_field_246 <- marc_field_246[, colSums(is.na(marc_field_246)) != nrow(marc_f
   ungroup() %>%
   unique() %>%
   unite("X246",`$a`:`$b`,sep = " ",na.rm = TRUE) %>% 
+  mutate(X246 = str_replace_all(X246," +"," "),
+         X246 = str_remove(X246, "\\s+\\/\\s{0,}$"),
+         X246 = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,X246),
+                           ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",X246),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,X246),
+                                  ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)","\\1.\\2\\U\\5",perl = TRUE,X246),
+                                         ifelse(grepl("(\\W)( )(:|;)( )(.)",X246),gsub("(\\W)( )(:|;)( )(.)","\\1\\2\\U\\5",perl = TRUE,X246),as.character(X246))))),
+         X246 = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,X246),
+                           ifelse(grepl("(\\W)( )(:|;)( )(\\(|\\[)(.)",X246),gsub("(\\W)( )(:|;)( )(\\(|\\[)(.)","\\1\\2\\U\\5\\6",perl = TRUE,X246),
+                                  ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(.)","\\1.\\2\\U\\5",perl = TRUE,X246),
+                                         ifelse(grepl("(\\W)( )(:|;)( ){0,1}(.)",X246),gsub("(\\W)( )(:|;)( ){0,1}(.)","\\1\\2\\U\\5",perl = TRUE,X246),as.character(X246))))),
+         X246 = str_replace_all(X246,"\\.{3} \\.{3}","... "),
+         X246 = gsub("( : )(.)",". \\U\\2",perl=TRUE,X246)) %>%
+  select(ZA_UWAGI, X246)
+} else {
+  marc_field_246 <- marc_field_246[, colSums(is.na(marc_field_246)) != nrow(marc_field_246)] %>%
+  filter(grepl("oryg",X246)) %>%
+  select(ZA_UWAGI,`$a`) %>%
+  group_by(ZA_UWAGI) %>%
+  mutate(`$a` = paste(ifelse(is.na(`$a`),"",as.character(`$a`)),collapse = ", ")) %>%
+  ungroup() %>%
+  unique() %>%
+  unite("X246",`$a`,sep = " ",na.rm = TRUE) %>% 
   mutate(X246 = str_replace_all(X246," +"," "),
          X246 = str_remove(X246, "\\s+\\/\\s{0,}$"),
          X246 = ifelse(grepl("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)",X246),gsub("([a-zaáàâãäăāåąæeéèêëěēėęiíìîïīįioóòôõöőøœuúùûüűūůyýcćčçdďđđgģğkķlłļnńñňņŋrřsśšşsßtťŧþţzżźžIVX])( )(:|;)( ){0,1}(\\(|\\[)(.)","\\1.\\2\\5\\U\\6",perl=TRUE,X246),
