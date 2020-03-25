@@ -2100,7 +2100,14 @@ record_people <- rbind(bn_record_people,cz_record_people,cz_record_people_art,pb
    mutate(record_id = as.integer(record_id)) %>%
   left_join(bind_rows(marc_field_bnb_100,marc_field_bnb_700,marc_field_bnb_701) %>% select(-X100,-X700,-X701),c("record_id"="id","field")) %>% 
   left_join(bind_rows(marc_field_czb_100,marc_field_czb_600,marc_field_czb_700,marc_field_cza_100,marc_field_cza_600,marc_field_cza_700) %>% select(-X100,-X600,-X700),c("record_id"="id","field")) %>% 
+  select(-`%v`) %>% 
   unite("total",`%1`:`$$q`,sep = " ", remove = FALSE, na.rm = TRUE)
+
+record_people[] <- lapply(record_people, gsub, pattern='~\\d+|~\\:', replacement='')
+record_people[] <- lapply(record_people, gsub, pattern="~|'", replacement='')
+record_people[] <- lapply(record_people, gsub, pattern="- ", replacement='-')
+record_people[] <- lapply(record_people, gsub, pattern=" +", replacement=' ')
+
 
 x <- 1:nrow(record_people)
 for (i in x) {
@@ -2119,7 +2126,11 @@ kartoteka_osob <- sheets_read(ss = "1Y8Y_pfkuKiv5npL6QJAXWbDO6twIJqsK3ArvaokjFkU
   cSplit("name_form_id",sep = "-",direction = "wide") %>% 
   mutate(name_form_id_4 = ifelse(grepl("pbla",name_form_id_3),"autorzy",
                                  ifelse(grepl("pblw",name_form_id_3),"wspoltworcy",as.character(name_form_id_4)))) %>% 
-  unite("name_form_id",name_form_id_1:name_form_id_5,sep = "-")
+  unite("name_form_id",name_form_id_1:name_form_id_5,sep = "-") %>% 
+  mutate(name_form = str_remove_all(name_form, "~\\d+|~\\:"),
+         name_form = str_remove_all(name_form, "~|'"),
+         name_form = str_replace_all(name_form, "- ", "-"),
+         name_form = str_replace_all(name_form, " +", " "))
 
 nodegoat_people <- record_people %>% 
   filter(person_match==TRUE) %>% 
@@ -2201,7 +2212,67 @@ nodegoat_people <- record_people %>%
   ungroup() %>% 
   arrange(id_osoby,group_id) %>% 
   unique() %>% 
-  mutate(Project_ID = 1:n())
+  mutate(Death = ifelse(Death == "", NA, as.character(Death))) %>% 
+  group_by_at(vars(Index_Name:Numeration)) %>% 
+  mutate(group_id = paste(unique(na.omit(group_id)),collapse = "|"),
+         Project_ID = paste(unique(na.omit(Project_ID)),collapse = "|"),
+         id_osoby = paste(unique(na.omit(id_osoby)),collapse = "|"),
+         name_form_id = paste(unique(na.omit(name_form_id)),collapse = "|"),
+         Numeration_arabic = paste(unique(na.omit(Numeration_arabic)),collapse = "|"),
+         Birth = paste(unique(na.omit(Birth)),collapse = "|"),
+         Death = paste(unique(na.omit(Death)),collapse = "|")) %>% 
+  ungroup() %>% 
+  arrange(id_osoby,group_id) %>% 
+  unique() %>% 
+  mutate(Project_ID = sprintf("%05d", 1:n()))
+nodegoat_people[] <- lapply(nodegoat_people, gsub, pattern=" +", replacement=' ')
+nodegoat_people <- nodegoat_people %>% 
+  mutate(Unknown_Name_Source = Addition_to_Name,
+         Addition_to_Name = ifelse(grepl("\\(smz\\.\\)|\\(sam\\.\\)", Addition_to_Name), "", as.character(Addition_to_Name))) %>% 
+  mutate(Other_Name_Form = ifelse(Other_Name_Form == "", "; ", as.character(Other_Name_Form))) %>% 
+  cSplit("Other_Name_Form",sep = "; ",direction = "long") %>% 
+  unique() %>% 
+  mutate(Other_Name_Form = str_remove(Other_Name_Form, ";"))
+x <- 1:nrow(nodegoat_people)
+for (i in x) {
+  progress(match(i,x), max.value = length(x))
+  if (str_replace_all(str_to_lower(nodegoat_people$Index_Name[i]), "\\W", "") == str_replace_all(str_to_lower(nodegoat_people$Other_Name_Form[i]), "\\W", "")) {
+    nodegoat_people$Other_Name_Form[i] <- ""
+  }
+}
+nodegoat_people <- nodegoat_people %>% 
+  group_by(Project_ID) %>% 
+  mutate(Other_Name_Form = paste(Other_Name_Form, collapse = "; ")) %>% 
+  ungroup() %>% 
+  unique() %>% 
+  mutate(Other_Name_Form = str_remove(Other_Name_Form, "; $"),
+         Index_Name = ifelse(grepl(",", Index_Name), as.character(Index_Name), 
+                             ifelse(str_detect(Index_Name, "^\\p{Ll}| \\p{Ll}"), as.character(Index_Name), str_replace(Index_Name, " ", ", "))))
+
+x <- 2:nrow(nodegoat_people)
+j <- 1
+for (i in x) {
+  progress(match(i,x), max.value = length(x))
+  if (str_extract(nodegoat_people$id_osoby[i], ".*?(?=\\||$)") == str_extract(nodegoat_people$id_osoby[i-1], ".*?(?=\\||$)")) {
+    nodegoat_people$Project_ID[i] <- sprintf("%05d",j)
+  } else {
+    j <- j + 1
+    nodegoat_people$Project_ID[i] <- sprintf("%05d",j)
+  }
+}
+
+
+
+
+
+
+
+
+
+
+test <- "bnb465|bnb466|bnb467|bnb468|bnb469|bnb470|bnb471|bnb472|bnb473|bnb474|bnb475|bnb476|bnb477|bnb478|bnb479|bnb480|bnb481|bnb482|bnb483|bnb484|bnb485|bnb486|bnb487|bnb488|bnb489|bnb490|bnb491|bnb492|bnb5664|bnb6130|bnb466|bnb467|bnb470|bnb471|bnb475|bnb477|bnb480|bnb481|bnb485|bnb486|bnb487|bnb488|bnb489|bnb490|bnb491|bnb492"
+
+test2 <- "bnb465|bnb478|bnb479|bnb484|bnb468|bnb469|bnb472|bnb473"
 
 
 write.xlsx(nodegoat_people, "C:/Users/Cezary/Desktop/nodegoat_people.xlsx")
@@ -2309,26 +2380,6 @@ nodegoat_series <- kartoteka_serii %>%
   
 write.csv2(nodegoat_series, file = "C:/Users/Cezary/Desktop/nodegoat_series.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
-```
-
-
-```{r}
-bn_people_record_id_X701 <- bn_people_record_id_X701 %>%
-  group_by(name_total) %>%
-  mutate(record_id_group = paste(record_id,collapse = "|")) %>%
-  mutate(record_id_group = paste("bn_X701",record_id_group,sep = "|")) %>%
-  ungroup() %>%
-  select(last_name,first_name,years,name_total,record_id_group) %>%
-  unique()
-
-#concatenate all bn
-bn_people_record_id <- rbind(bn_people_record_id_X100,bn_people_record_id_X700,bn_people_record_id_X701)
-bn_people_record_id <- bn_people_record_id %>%
-  group_by(name_total) %>%
-  mutate(record_id_group = paste(record_id_group,collapse = "~")) %>%
-  ungroup() %>%
-  mutate(person_id = paste("bn_b_",seq.int(nrow(bn_people_record_id)),sep = "")) %>%
-  select(person_id,1:5)
 ```
 
 

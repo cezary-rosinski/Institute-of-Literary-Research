@@ -1,0 +1,82 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r }
+library(svMisc)
+library(rvest)
+library(stringr)
+library(plyr)
+library(stringr)
+library(tidyverse)
+library(reshape2)
+library(zoo)
+library(sqldf)
+library(splitstackshape)
+library(dplyr)
+#download the list
+#link_list <- read.csv2("C:/Users/Cezary/Desktop/link_list.csv", encoding = "Windows-1250", header = TRUE, stringsAsFactors = FALSE)
+cz_file <- readLines("C:/Users/Cezary/Downloads/int.bib", encoding = "UTF-8")
+
+data1 <- data.frame(cz_file) %>% 
+  mutate(id = as.character(str_extract_all(cz_file, "^\\d{9}")),
+         field = str_replace_all(cz_file, "(\\d{9} )(\\w{3})(.*)", "\\2"),
+         content = str_replace_all(str_replace_all(cz_file,"(\\d{9} )(\\w{3})(\\s{3})(.*)","\\1\\2 \\4"),"(\\d{9} )(\\w{3})(\\d\\s|\\d\\d|\\s\\d){0,2}( L )(.*)","\\3\\5"),
+         id_field = paste(id,field,sep = "|"))
+count <- data1 %>%
+  select(5,1)
+count <- as.data.frame(table(count$id_field))
+data1 <- merge(x=data1,y=count, by.x = "id_field", by.y = "Var1")
+data1_to_join <- data1 %>%
+  filter(Freq > 1)
+data1_to_join <- ddply(data1_to_join, .(id_field), summarize, content = paste(content, collapse="|"))
+data1_to_join <- mutate(data1_to_join,
+                        id = str_replace_all(data1_to_join$id_field,"(\\d{9})(\\|)(.*)", "\\1"),
+                        field = str_replace_all(data1_to_join$id_field,"(\\d{9})(\\|)(.*)", "\\3"))
+data1_ok <- data1 %>%
+  filter(Freq == 1) %>%
+  select(-2,-6) %>%
+  select(1,4,2,3)
+data1 <- rbind(data1_ok,data1_to_join)
+data1 <- data1[order(as.character(data1$id_field)),]
+data1 <- data.frame(data1)
+cz_database <- dcast(data1, id ~ field, value.var="content")
+
+#list preparations
+links <- cz_database %>%
+  select(id,SIF,`964`,`856`) %>% 
+  mutate(link = grepl("INT",`964`)) %>% 
+  filter(link==TRUE) %>%
+  select(-5) %>% 
+  mutate(link = grepl("^40|^41",`856`),
+         web = grepl("42\\${2}u",`856`)) %>% 
+  filter(link==TRUE & web == FALSE) %>%
+  select(-5,-6)
+links$`856` <- gsub("(^)(.*?\\${2}u)(.*?)(\\,{0,1})((\\${2})(.*)|$)","\\3",links$`856`)
+links$SIF <- gsub("(^)(.*?\\${2}a)(.*?)(\\,{0,1})((\\${2})(.*)|$)","\\3",links$SIF)
+link_list <- links %>%
+  select(-3)
+
+#empty table
+table_data <- data.frame(id = character(), SIF = character(), proper_link = character(), stringsAsFactors=FALSE)
+#iterations
+x <- 1:nrow(links)
+url1 <- "https://wayback.webarchiv.cz/wayback/*/"
+for (i in x) {
+  url2 <- link_list$`856`[i]
+  url <- paste(url1,url2,sep = "")
+  tryCatch({
+    webpage <- read_html(url)
+    proper_link <- html_nodes(webpage, "div:nth-child(1) div:nth-child(2) div:nth-child(2) p.wbThis > a:nth-child(3)")
+    proper_link <- head(html_attr(proper_link, "href"))
+    }, error=function(e){
+      proper_link <<- "No link in the Webarchiv"
+      })
+  iteration <- data.frame(record_id = link_list$id[i],sif = link_list$SIF[i],proper_link)
+  table_data <- rbind(table_data,iteration)
+  progress(match(i,x), max.value = length(x))
+}
+write.csv2(table_data, "C:/Users/Cezary/Desktop/webarchiv_links.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+
+```
+
