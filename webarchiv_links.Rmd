@@ -47,7 +47,7 @@ links <- cz_database %>%
   select(id,SIF,`964`,`856`) %>% 
   mutate(link = grepl("INT",`964`)) %>% 
   filter(link==TRUE) %>%
-  select(-5) %>% 
+  select(-5) %>%  
   mutate(link = grepl("^40|^41",`856`),
          web = grepl("42\\${2}u",`856`)) %>% 
   filter(link==TRUE & web == FALSE) %>%

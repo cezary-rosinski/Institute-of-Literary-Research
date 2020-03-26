@@ -6,7 +6,7 @@ output: html_notebook
 ```{r loading data}
 options(java.parameters = "-Xmx32000m")
 options(scipen = 999)
-pacman::p_load(stringr,tidyverse,RJDBC,sqldf,dplyr,splitstackshape,svMisc,data.table,googlesheets4,openxlsx)
+pacman::p_load(stringr,tidyverse,RJDBC,sqldf,dplyr,splitstackshape,svMisc,data.table,googlesheets4,openxlsx,RSelenium,stringdist)
 
 #functions
 trim <- function (x) gsub("^\\s+|\\s+$", "", x)
@@ -2096,6 +2096,9 @@ write.csv2(series, "C:/Users/Cezary/Desktop/samizdat_kartoteka_serii.csv", row.n
 
 ```{r kartoteki po pracach dziewczyn}
 #osoby
+rD <- rsDriver(port=4444L,browser="chrome", chromever="79.0.3945.36")
+remDr <- rD$client
+#
 record_people <- rbind(bn_record_people,cz_record_people,cz_record_people_art,pbl_record_people_books,pbl_record_people_art) %>% 
    mutate(record_id = as.integer(record_id)) %>%
   left_join(bind_rows(marc_field_bnb_100,marc_field_bnb_700,marc_field_bnb_701) %>% select(-X100,-X700,-X701),c("record_id"="id","field")) %>% 
@@ -2103,7 +2106,7 @@ record_people <- rbind(bn_record_people,cz_record_people,cz_record_people_art,pb
   select(-`%v`) %>% 
   unite("total",`%1`:`$$q`,sep = " ", remove = FALSE, na.rm = TRUE)
 
-record_people[] <- lapply(record_people, gsub, pattern='~\\d+|~\\:', replacement='')
+record_people[] <- lapply(record_people, gsub, pattern='~\\d+|~\\:|~\\,', replacement='')
 record_people[] <- lapply(record_people, gsub, pattern="~|'", replacement='')
 record_people[] <- lapply(record_people, gsub, pattern="- ", replacement='-')
 record_people[] <- lapply(record_people, gsub, pattern=" +", replacement=' ')
@@ -2127,7 +2130,7 @@ kartoteka_osob <- sheets_read(ss = "1Y8Y_pfkuKiv5npL6QJAXWbDO6twIJqsK3ArvaokjFkU
   mutate(name_form_id_4 = ifelse(grepl("pbla",name_form_id_3),"autorzy",
                                  ifelse(grepl("pblw",name_form_id_3),"wspoltworcy",as.character(name_form_id_4)))) %>% 
   unite("name_form_id",name_form_id_1:name_form_id_5,sep = "-") %>% 
-  mutate(name_form = str_remove_all(name_form, "~\\d+|~\\:"),
+  mutate(name_form = str_remove_all(name_form, "~\\d+|~\\:|~\\,"),
          name_form = str_remove_all(name_form, "~|'"),
          name_form = str_replace_all(name_form, "- ", "-"),
          name_form = str_replace_all(name_form, " +", " "))
@@ -2175,6 +2178,8 @@ nodegoat_people <- record_people %>%
          Death = paste(unique(na.omit(Death)),collapse = "|"),
          name_form_id = paste(unique(na.omit(name_form_id)),collapse = "|")) %>% 
   ungroup() %>% 
+# test <- nodegoat_people %>% 
+#   filter(grepl("\\|", Name)&!grepl("\\|", Given_Name))
   group_by(id_osoby) %>% 
   mutate(group_id = paste(unique(na.omit(group_id)),collapse = "|"),
          Project_ID = paste(unique(na.omit(Project_ID)),collapse = "|"),
@@ -2260,23 +2265,60 @@ for (i in x) {
     nodegoat_people$Project_ID[i] <- sprintf("%05d",j)
   }
 }
+nodegoat_people$Name[grepl("papież", nodegoat_people$Index_Name)] <- ""
+nodegoat_people$Given_Name[grepl("papież", nodegoat_people$Index_Name)] <- ""
+
+#viaf enrichment
+nodegoat_people$LOD_ID <- NA
+nodegoat_people$viaf_name <- NA
+y <- 1:nrow(nodegoat_people)
+i <- 2918
+for (i in y) {
+  progress(match(i,y), max.value = length(y))
+  if (nchar(nodegoat_people$Index_Name[i])>=8) {
+    url <- paste("http://viaf.org/viaf/search?query=local.personalNames%20all%20%22", str_replace_all(paste(nodegoat_people$Index_Name[i], nodegoat_people$Birth[i], nodegoat_people$Death[i], sep = " ")," ", "%20"), "&sortKeys=holdingscount&recordSchema=BriefVIAF", sep = "")
+    remDr$navigate(url)
+    tryCatch({
+      list_of_people <- remDr$findElements(using = 'css selector', '#resultsList a')
+      list_of_people <- sapply(list_of_people, function(x) x$getElementText())
+      list_of_people <- as.character(list_of_people)
+      z <- 1:length(list_of_people)
+      for (k in z) {
+        list_of_people[k] <- strsplit(list_of_people[k], "\n")[[1]][1]
+      }
+      lkj <- as.matrix(stringdistmatrix(a=paste(nodegoat_people$Index_Name[i], nodegoat_people$Birth[i], nodegoat_people$Death[i], sep = " "),b=list_of_people, method = "jw"))
+      tekst <- strsplit(list_of_people[match(min(lkj),lkj)], "\n")[[1]][1]
+      enter <- remDr$findElement(using = "partial link text", tekst)
+      enter$sendKeysToElement(sendKeys = list(key = "enter"))
+      nodegoat_people$LOD_ID[i] <- str_remove(str_replace(as.character(remDr$getCurrentUrl()),"https","http"),"\\#.*$")
+      viaf_name <- remDr$findElement(using = 'css selector', "#nameEntry1")
+      viaf_name <- as.character(viaf_name$getElementText())
+      nodegoat_people$viaf_name[i] <- viaf_name
+      }, error=function(e){
+        nodegoat_people$LOD_ID[i] <<- "Brak danych (CR)"
+        nodegoat_people$viaf_name[i] <- "Brak danych (CR)"
+      })
+  }
+}
 
 
 
+nodegoat_people <- nodegoat_people %>% 
+  mutate(ile_znakow = nchar(Index_Name))
 
 
+test <- nodegoat_people
+for (i in 1:nrow(nodegoat_people)) {
+  test$match[i] <- grepl(test$Name[i], test$viaf_name[i])
+  
+}
+
+count <- as.data.frame(table(test$match))
+    
 
 
-
-
-
-test <- "bnb465|bnb466|bnb467|bnb468|bnb469|bnb470|bnb471|bnb472|bnb473|bnb474|bnb475|bnb476|bnb477|bnb478|bnb479|bnb480|bnb481|bnb482|bnb483|bnb484|bnb485|bnb486|bnb487|bnb488|bnb489|bnb490|bnb491|bnb492|bnb5664|bnb6130|bnb466|bnb467|bnb470|bnb471|bnb475|bnb477|bnb480|bnb481|bnb485|bnb486|bnb487|bnb488|bnb489|bnb490|bnb491|bnb492"
-
-test2 <- "bnb465|bnb478|bnb479|bnb484|bnb468|bnb469|bnb472|bnb473"
-
-
-write.xlsx(nodegoat_people, "C:/Users/Cezary/Desktop/nodegoat_people.xlsx")
-write.csv2(nodegoat_people, file = "C:/Users/Cezary/Desktop/nodegoat_people.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+#write.xlsx(nodegoat_people, "C:/Users/Cezary/Desktop/nodegoat_people.xlsx")
+write.csv2(nodegoat_people, file = "C:/Users/Cezary/Desktop/nodegoat_people_test.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 #instytucje
 
