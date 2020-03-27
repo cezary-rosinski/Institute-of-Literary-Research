@@ -2324,7 +2324,7 @@ count <- as.data.frame(table(test$match))
 
 
 #write.xlsx(nodegoat_people, "C:/Users/Cezary/Desktop/nodegoat_people.xlsx")
-write.csv2(nodegoat_people, file = "C:/Users/Cezary/Desktop/nodegoat_people_test.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(nodegoat_people, file = "C:/Users/Cezary/Desktop/nodegoat_people_viaf_licznik.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 #instytucje
 
