@@ -1,0 +1,64 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+
+options(java.parameters = "-Xmx32000m")
+options(scipen = 999)
+pacman::p_load(stringr,tidyverse,RJDBC,sqldf,dplyr,splitstackshape,svMisc,data.table,googlesheets4,openxlsx,RSelenium,stringdist)
+rD <- rsDriver(port=4444L,browser="chrome", chromever="79.0.3945.36")
+remDr <- rD$client
+
+czasopisma <- c("Annales Missiologici Posnanienses", "Artium Quaestiones", "Badania Fizjograficzne Seria A - Geografia Fizyczna", "Badania Fizjograficzne Seria B - Botanika", "Balcanica Posnaniensia Acta et studia", "Biblioteka", "Biuletyn Historii Wychowania", "Bohemistyka", "Comparative Legilinguistics", "Czasopismo Prawno-Historyczne", "Ecclesia. Studia z Dziejów Wielkopolski", "Ethics in Progress", "Filozofia Chrześcijańska", "Filozofia Publiczna i Edukacja Demokratyczna", "Folia Praehistorica Posnaniensia", "Folia Scandinavica Posnaniensia", "Forum Poetyki", "Glottodidactica. An International Journal of Applied Linguistics", "Gwary Dziś", "Historia@Teoria", "Homo Ludens", "Images. The International Journal of European Film, Performing Arts and Audiovisual Communication", "Interdisciplinary Studies in Musicology", "Interdyscyplinarne Konteksty Pedagogiki Specjalnej", "International Journal of Korean Humanities and Social Sciences", "Investigationes Linguisticae", "Język. Komunikacja. Informacja", "Journal of Applied Cultural Studies", "Karaite Archives", "Kultura-Społeczeństwo-Edukacja", "Kultury Wschodniosłowiańskie - Oblicza i Dialog", "Nauka i Szkolnictwo Wyższe", "Neofilolog", "Peitho. Examina Antiqua", "Polish Journal of Landscape Studies", "Polonistyka. Innowacje", "Porównania", "Poznańskie Spotkania Językoznawcze", "Poznańskie Studia Polonistyczne. Seria Językoznawcza", "Poznańskie Studia Polonistyczne. Seria Literacka", "Poznańskie Studia Slawistyczne", "Poznańskie Studia Teologiczne", "Praktyka Teoretyczna", "Przegląd Krytyczny", "Przegląd Politologiczny", "Przegląd Prawa Rolnego", "Przegląd Prawniczy Uniwersytetu im. Adama Mickiewicza / Adam Mickiewicz University Law Review", "Przegląd Strategiczny", "Przestrzenie Teorii", "Quaestiones Geographicae", "Refleksje. Pismo naukowe studentów i doktorantów WNPiD UAM", "Rocznik Integracji Europejskiej", "Rocznik Pedagogiczny", "Rozwój Regionalny i Polityka Regionalna", "Ruch Prawniczy, Ekonomiczny i Socjologiczny", "Scripta Neophilologica Posnaniensia", "Slavia Antiqua. Rocznik poświęcony starożytnościom słowiańskim", "Slavia Occidentalis", "Society Register", "Studia Azjatystyczne", "Studia Edukacyjne", "Studia Europaea Gnesnensia", "Studia Germanica Posnaniensia", "Studia Prawa Publicznego", "Studia Kulturoznawcze", "Studia Romanica Posnaniensia", "Studia Rossica Posnaniensia", "Studia Ukrainica Posnaniensia", "Studia z kognitywistyki i filozofii umysłu", "Studies in Second Language Learning and Teaching", "Symbolae Philologorum Posnaniensium Graecae et Latinae", "Środkowoeuropejskie Studia Polityczne", "Teologia i Moralność", "Teologia Praktyczna", "Wole Oko. Nowa Seria", "Zeszyty Naukowe Centrum Badań im. Edyty Stein")
+
+url <- "http://pressto.amu.edu.pl/index.php/index/lista_czasopism"
+lista <- data.frame(stringsAsFactors = FALSE)
+x <- 1:length(czasopisma)
+for (i in x) {
+  progress(match(i,x), max.value = length(x))
+  remDr$navigate(url)
+  tytul <- remDr$findElement(using = 'link text', czasopisma[i])
+  tytul$sendKeysToElement(sendKeys = list(key = "enter"))
+  tytul <- as.character(tytul$getCurrentUrl())
+  iteracja <- cbind(czasopisma[i], tytul)
+  lista <- rbind(lista, iteracja)
+}
+
+lista$tytul[lista$V1 == "Forum Poetyki"] <- "https://pressto.amu.edu.pl/index.php/fp"
+lista$tytul[lista$V1 == "Studia Edukacyjne"] <- "https://pressto.amu.edu.pl/index.php/se"
+
+lista <- lista %>% 
+  mutate(skrt = str_extract(tytul, "(?<=index.php\\/)(.*?)(?=\\/.*$|$)"))
+lista <- lista %>% 
+  mutate(oai = paste("https://pressto.amu.edu.pl/index.php/fp/", skrt, "/oai?verb=Identify", sep = ""))
+
+write.xlsx(lista, "C:/Users/Cezary/Desktop/lista.xlsx")
+test <- data_frame(lista) %>% 
+  unique()
+
+#APCZ
+
+apcz_czasopisma <- c("Acta Poloniae Historica", "Acta Universitatis Nicolai Copernici Archeologia", "Acta Universitatis Nicolai Copernici Ekonomia", "Acta Universitatis Nicolai Copernici Pedagogika", "Acta Universitatis Nicolai Copernici Zabytkoznawstwo i Konserwatorstwo", "Acta Universitatis Nicolai Copernici. Zarządzanie", "Archiwa - Kancelarie - Zbiory", "Archaeologia Historica Polona", "Archiwum Emigracji", "Biblica et Patristica Thoruniensia", "Biuletyn Polskiej Misji Historycznej", "Bulletin of Geography. Physical Geography Series", "Bulletin of Geography. Socio-economic Series", "Cognitive Science – New Media – Education", "Comparative Law Review", "Copernican Journal of Finance & Accounting", "Copernican Letters", "Copernican Management Journal", "Dialogi Polityczne", "Dzieje Najnowsze", "Dynamic Econometric Models", "Eastern European Countryside", "Ecological Questions", "Edukacja Dorosłych", "Ekonomia i Prawo. Economics and Law", "Equilibrium", "Études et Travaux", "Europa Orientalis. Studia z Dziejów Europy Wschodniej i Państw Bałtyckich", "Folia Toruniensia", "HERBALISM", "Historia i Polityka", "Itinera Spiritualia. Commentarii Periodici Instituti Carmelitani Spiritualitatis Cracoviae", "Journal of Corporate Responsibility and Leadership", "Journal of Education, Health and Sport", "Journal of Positive Management", "Klio - Czasopismo Poświęcone Dziejom Polski i Powszechnym", "Klio Polska. Studia i Materiały z Dziejów Historiografii Polskiej", "Kwartalnik Historyczny", "Legatio: The Journal for Renaissance and Early Modern Diplomatic Studies", "Linguistica Copernicana", "Literatura Ludowa", "Litteraria Copernicana", "Logic and Logical Philosophy", "LUD. Organ Polskiego Towarzystwa Ludoznawczego i Komitetu Nauk Etnologicznych PAN", "Łódzkie Studia Etnograficzne", "Medical and Biological Sciences", "Nowe Media. Czasopismo Naukowe", "Odrodzenie i Reformacja w Polsce", "Oeconomia Copernicana", "Ordines Militares Colloquia Torunensia Historica. Yearbook for the Study of the Military Orders", "Paedagogia Christiana", "Pedagogy and Psychology of Sport", "Polish Yearbook of Environmental Law", "Polska 1944/45-1989. Studia i Materiały", "Pracownik i Pracodawca", "Prawo Budżetowe Państwa i Samorządu", "Przegląd Badań Edukacyjnych", "Przegląd Prawa Ochrony Środowiska", "Quality in Sport", "Rocznik Andragogiczny", "Rocznik Lituanistyczny", "Rocznik Przekładoznawczy", "Rocznik Toruński", "Roczniki Dziejów Społecznych i Gospodarczych", "Roczniki Historii Socjologii", "Roczniki Historyczne", "Ruch Filozoficzny", "Scientia et Fides", "Societas et Ius", "Studia Geohistorica", "Studia Iuridica Toruniensia", "Studia Paedagogica Ignatiana", "Studia Pelplińskie", "Studia Pigoniana", "Studia z Dziejów Rosji i Europy Środkowo-Wschodniej", "Studia z Historii Filozofii", "Studia Źródłoznawcze. Commentationes", "Sztuka Edycji", "Sztuka i Kultura", "Teologia i Człowiek", "Tekstura. Rocznik Filologiczno-Kulturoznawczy", "The Copernicus Journal of Political Studies", "Theoria et Historia Scientiarum", "Topological Methods in Nonlinear Analysis", "Toruńskie Studia Bibliologiczne", "Torun International Studies", "Toruńskie Studia Polsko-Włoskie", "Translational Research In Veterinary Science", "Zagadnienia Naukoznawstwa", "Zbiór Wiadomości do Antropologii Muzealnej")
+url <- "https://apcz.umk.pl/czasopisma/index.php/index/about"
+apcz <- data.frame(stringsAsFactors = FALSE)
+x <- 1:length(apcz_czasopisma)
+for (i in x) {
+  progress(match(i,x), max.value = length(x))
+  remDr$navigate(url)
+  tytul <- remDr$findElement(using = 'link text', apcz_czasopisma[i])
+  tytul$sendKeysToElement(sendKeys = list(key = "enter"))
+  tytul <- as.character(tytul$getCurrentUrl())
+  iteracja <- cbind(apcz_czasopisma[i], tytul)
+  apcz <- rbind(apcz, iteracja)
+}
+
+apcz <- apcz %>% 
+  mutate(skrt = str_extract(tytul, "(?<=index.php\\/)(.*?)(?=\\/.*$|$)")) %>% 
+  mutate(oai = paste("https://apcz.umk.pl/czasopisma/index.php/", skrt, "/oai", sep = ""))
+
+write.xlsx(apcz, "C:/Users/Cezary/Desktop/lista.xlsx")
+
+```
+

@@ -2302,6 +2302,12 @@ for (i in y) {
 }
 
 
+nodegoat_people <- read.csv2("C:/Users/Cezary/Downloads/nodegoat_people_test.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) 
+
+count <- as.data.frame(table(nodegoat_people$LOD_ID))
+
+nodegoat_people <- merge(nodegoat_people, count, by.x = "LOD_ID", by.y = "Var1", all.x = TRUE)
+
 
 nodegoat_people <- nodegoat_people %>% 
   mutate(ile_znakow = nchar(Index_Name))
