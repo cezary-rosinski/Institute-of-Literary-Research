@@ -2,6 +2,7 @@
 title: "R Notebook"
 output: html_notebook
 ---
+drobna zmiana
 UWAGA!
 Wyczyścić listę mapowanie_osob_bn_pbl_po_imporcie (za dużo niepoprawnych relacji pbl-bn po ostatnim imporcie)
 Przed rozpoczęciem pracy zaktualizuj zgodnie z obecnym stanem bazy listę książek na dysku za poprzedni rocznik.
