@@ -10,6 +10,7 @@ pacman::p_load(stringr,tidyverse,RJDBC,sqldf,dplyr,splitstackshape,svMisc,data.t
 
 #functions
 trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+trim2 <- function (x) gsub(" +", " ", x)
 paste3 <- function(...,sep="",collapse=NULL) {
    L <- list(...)
    L <- lapply(L,function(x) {x[is.na(x)] <- ""; x})
@@ -2301,67 +2302,123 @@ for (i in y) {
   }
 }
 
-
+#po viafie
 nodegoat_people <- read.csv2("C:/Users/Cezary/Downloads/nodegoat_people_test.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) 
 
 count <- as.data.frame(table(nodegoat_people$LOD_ID))
 
 nodegoat_people <- merge(nodegoat_people, count, by.x = "LOD_ID", by.y = "Var1", all.x = TRUE)
 
+te_same_osoby <- nodegoat_people %>% 
+  filter(Freq == 2) %>% 
+  mutate(pierwsza_litera = substr(Index_Name, 1, 1))
 
 nodegoat_people <- nodegoat_people %>% 
-  mutate(ile_znakow = nchar(Index_Name))
+  filter(Freq != 2) %>% 
+  select(-Freq)
 
+te_same_osoby$te_same_osoby <- cumsum(!duplicated(te_same_osoby[18:20]))
+te_same_osoby[te_same_osoby==""]<-NA
 
-test <- nodegoat_people
+te_same_osoby <- te_same_osoby %>% 
+  group_by(te_same_osoby) %>%
+  summarise_each(funs(paste(unique(na.omit(.)), collapse = "|"))) %>% 
+  mutate(Index_Name = str_replace(Index_Name, "^(.*?)(\\|.*$)", "\\1"),
+         Name = str_replace(Name, "^(.*?)(\\|.*$)", "\\1"),
+         Given_Name = str_replace(Given_Name, "^(.*?)(\\|.*$)", "\\1"),
+         Pseudonym_Kryptonym = str_replace(Pseudonym_Kryptonym, "^(.*?)(\\|.*$)", "\\1"),
+         Project_ID = as.integer(str_replace(Project_ID, "^(.*?)(\\|.*$)", "\\1")),
+         Death = as.integer(Death)) %>% 
+  select(-Freq,-pierwsza_litera)
+class(te_same_osoby$Project_ID)
+nodegoat_people <- nodegoat_people %>% 
+  bind_rows(te_same_osoby)
+
+nodegoat_people <- nodegoat_people
 for (i in 1:nrow(nodegoat_people)) {
-  test$match[i] <- grepl(test$Name[i], test$viaf_name[i])
+  nodegoat_people$match[i] <- grepl(nodegoat_people$Name[i], nodegoat_people$viaf_name[i])
   
 }
 
-count <- as.data.frame(table(test$match))
-    
+nodegoat_people$LOD_ID[nodegoat_people$match == FALSE] <- NA
 
+nodegoat_people <- nodegoat_people %>% 
+  mutate(Pseudonym_Kryptonym = ifelse(Pseudonym_Kryptonym == "", "; ", as.character(Pseudonym_Kryptonym))) %>% 
+  cSplit("Pseudonym_Kryptonym",sep = "; ",direction = "long") %>% 
+  unique() %>% 
+  mutate(Pseudonym_Kryptonym = str_remove(Pseudonym_Kryptonym, ";"))
+
+nodegoat_people[nodegoat_people==""]<-NA
+nodegoat_people <- nodegoat_people %>% 
+  group_by(Project_ID) %>%
+  summarise_each(funs(paste(unique(na.omit(.)), collapse = "|"))) %>% 
+  mutate(True_Name = ifelse(True_Name == "", "|", as.character(True_Name))) %>% 
+  cSplit("True_Name",sep = "|",direction = "long") %>% 
+  unique()
+nodegoat_people[nodegoat_people==""]<-NA
+nodegoat_people <- nodegoat_people %>% 
+  group_by(Project_ID) %>%
+  summarise_each(funs(paste(unique(na.omit(.)), collapse = "|")))
+
+nodegoat_people$Unknown_Name_Source[!grepl("sam|smz", nodegoat_people$Unknown_Name_Source)] <- ""
+
+nodegoat_people <- nodegoat_people %>% 
+  mutate(Pseudonym_Kryptonym = str_replace_all(Pseudonym_Kryptonym, "\\|", "; "),
+         True_Name = str_replace_all(True_Name, "\\|", "; "),
+         Other_Name_Form = str_replace_all(Other_Name_Form, "\\|", "; "),
+         Addition_to_Name = str_replace_all(Addition_to_Name, "\\|", "; ")) %>% 
+  select(-te_same_osoby, -match)
 
 #write.xlsx(nodegoat_people, "C:/Users/Cezary/Desktop/nodegoat_people.xlsx")
-write.csv2(nodegoat_people, file = "C:/Users/Cezary/Desktop/nodegoat_people_viaf_licznik.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(nodegoat_people, file = "C:/Users/Cezary/Desktop/nodegoat_people.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 #instytucje
 
-kartoteka_instytucji <- sheets_read(ss = "1MX8oqQly65GzkEhwKGf7NqBc4L4B5mNj12NtgLgB5Bs", sheet = "Arkusz1",col_types = "c")
+kartoteka_instytucji <- sheets_read(ss = "1MX8oqQly65GzkEhwKGf7NqBc4L4B5mNj12NtgLgB5Bs", sheet = "Arkusz1",col_types = "c") %>% 
+  mutate(Entity_Name = ifelse(str_count(Entity_Name, "\\[") == 1 & str_count(Entity_Name, "\\]") == 0, trim2(paste(Entity_Name, "]", sep = "")),
+                              ifelse(str_count(Entity_Name, "\\[") == 0 & str_count(Entity_Name, "\\]") == 1 & substr(Entity_Name, nchar(Entity_Name), nchar(Entity_Name)) == "]", trim2(str_remove(Entity_Name, "\\]")), trim2(as.character(Entity_Name)))),
+         Entity_Name = ifelse(substr(Entity_Name, 1, 1) == "\"" & substr(Entity_Name, nchar(Entity_Name), nchar(Entity_Name)) == "\"", str_remove_all(Entity_Name, "\""), as.character(Entity_Name)),
+         Entity_Name = ifelse(substr(Entity_Name, 1, 1) == "\"" & str_count(Entity_Name, "\"") == 1, str_remove(Entity_Name, "\""), as.character(Entity_Name)),
+         Entity_Name = str_remove_all(Entity_Name, "^\\[\"|\"\\]$"),
+         Entity_Name = ifelse(str_count(Entity_Name, "\\[") == 1 & str_count(Entity_Name, "\\]") == 1 & substr(Entity_Name, 1, 1) == "[" & substr(Entity_Name, nchar(Entity_Name), nchar(Entity_Name)) == "]", str_remove_all(Entity_Name, "^\\[|\\]$"), as.character(Entity_Name)),
+         Entity_Name = str_remove_all(Entity_Name, "~\\d+|~\\:|~\\,"),
+         Entity_Name = str_remove_all(Entity_Name, "~"),
+         Located_Location = ifelse(str_count(Located_Location, "\\[") == 1 & str_count(Located_Location, "\\]") == 0, paste(Located_Location, "]", sep = ""), as.character(Located_Location)),
+         Located_Location = str_remove_all(Located_Location, "~\\d+|~\\:|~\\,"),
+         Located_Location = str_remove_all(Located_Location, "~|\\] \\:$| \\:$"))
 
 nodegoat_institutions <- kartoteka_instytucji %>% 
-  mutate(Entity_Name = ifelse(str_count(Entity_Name,"\\[")>str_count(Entity_Name,"\\]"),str_remove_all(Entity_Name,"^\\["),
-                               ifelse(str_count(Entity_Name,"\\[")<str_count(Entity_Name,"\\]"),str_remove_all(Entity_Name,"\\]$"),paste3(Entity_Name)))) %>% 
   group_by(group_id) %>% 
-  mutate(Entity_Name = paste(unique(na.omit(Entity_Name)),collapse = "|"),
-         Related_Entity_Sub_Entity = paste(unique(na.omit(Related_Entity_Sub_Entity)),collapse = "|"),
-         Related_Entity_Main_Entity = paste(unique(na.omit(Related_Entity_Main_Entity)),collapse = "|"),
-         Located_Location = paste(unique(na.omit(Located_Location)),collapse = "|"),
-         group = paste(unique(na.omit(group)),collapse = "|")) %>% 
-  ungroup() %>% 
-  unique() %>% 
+  summarise_each(funs(paste(unique(na.omit(.)), collapse = "|"))) %>% 
   group_by_at(vars(c(Entity_Name,Related_Entity_Sub_Entity,Related_Entity_Main_Entity,Located_Location))) %>% 
   mutate(group_id = paste(unique(na.omit(group_id)),collapse = "|"),
          group = paste(unique(na.omit(group)),collapse = "|")) %>% 
   ungroup() %>% 
   unique() %>% 
   arrange(Entity_Name,-nchar(Located_Location)) %>% 
-  mutate(Project_ID = 1:n(),
+  mutate(Project_ID = sprintf("%05d", 1:n()),
          LOD_ID = NA)
 nodegoat_institutions <- nodegoat_institutions %>% 
   left_join(nodegoat_institutions %>% select(Project_ID_sub=Project_ID,Entity_Name,Related_Entity_Main_Entity),by = c("Related_Entity_Sub_Entity"="Entity_Name","Entity_Name"="Related_Entity_Main_Entity"))
 nodegoat_institutions <- nodegoat_institutions %>% 
   left_join(nodegoat_institutions %>% select(Project_ID_main=Project_ID,Entity_Name,Related_Entity_Sub_Entity),by = c("Related_Entity_Main_Entity"="Entity_Name","Entity_Name"="Related_Entity_Sub_Entity")) %>% 
-  mutate(Related_Entity_Sub_Entity = ifelse(Related_Entity_Sub_Entity!="",as.integer(Project_ID_sub),""),
-         Related_Entity_Main_Entity = ifelse(Related_Entity_Main_Entity!="",as.integer(Project_ID_main),"")) %>% 
+  mutate(Related_Entity_Sub_Entity = ifelse(Related_Entity_Sub_Entity!="",as.character(Project_ID_sub),""),
+         Related_Entity_Main_Entity = ifelse(Related_Entity_Main_Entity!="",as.character(Project_ID_main),"")) %>% 
   select(group_id:LOD_ID)
 
 write.csv2(nodegoat_institutions, file = "C:/Users/Cezary/Desktop/nodegoat_institutions.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
 
 #wydarzenia
 
-kartoteka_wydarzen <- sheets_read(ss = "1BosLyDVa7uxNTxw3Lt19PPADx8ZZcEuLYDnl--6vVDM", sheet = "Arkusz1",col_types = "c")
+kartoteka_wydarzen <- sheets_read(ss = "1BosLyDVa7uxNTxw3Lt19PPADx8ZZcEuLYDnl--6vVDM", sheet = "Arkusz1",col_types = "c") %>% 
+  mutate(Event_Name = trim(trim2(Event_Name)),
+         Event_Other_Names = trim(trim2(Event_Other_Names)),
+         Event_Number = trim(trim2(Event_Number)),
+         Event_Number_Arabic = trim(trim2(Event_Number_Arabic)),
+         Event_Year = trim(trim2(Event_Year)),
+         Located = trim(trim2(Located)),
+         Organiser_Main = trim(trim2(Organiser_Main)),
+         Organiser_Sub = trim(trim2(Organiser_Sub)))
 
 kartoteka_wydarzen[is.na(kartoteka_wydarzen)]<-""
 
@@ -2392,16 +2449,23 @@ nodegoat_events <- nodegoat_events[!duplicated(nodegoat_events$group_id),] %>%
          group = paste(unique(na.omit(group)),collapse = "|")) %>% 
   ungroup() %>% 
   unique() %>% 
-  mutate(Project_ID = 1:n()) %>% 
+  mutate(Project_ID = sprintf("%05d", 1:n())) %>% 
   select(group_id:group,Project_ID)
 
-write.csv2(nodegoat_events, file = "C:/Users/Cezary/Desktop/nodegoat_events.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+nodegoat_events[nodegoat_events==""]<-NA
+
+write.csv2(nodegoat_events, file = "C:/Users/Cezary/Desktop/nodegoat_events.csv", row.names = F, na = '', fileEncoding = 'UTF-8', quote = FALSE)
 
 #serie
 
-kartoteka_serii <- sheets_read(ss = "1UPBWh8743mJWVGFD1fg3CHx03eOH8lSWcX090QIFJgs", sheet = "Arkusz1",col_types = "c")
+kartoteka_serii <- sheets_read(ss = "1UPBWh8743mJWVGFD1fg3CHx03eOH8lSWcX090QIFJgs", sheet = "Arkusz1",col_types = "c") %>% 
+  mutate(Series_Title = trim(trim2(Series_Title)),
+         Addition_to_Title = trim(trim2(Addition_to_Title)),
+         Creator = trim(trim2(Creator)),
+         Sub_Series = trim(trim2(Sub_Series)),
+         Main_Series = trim(trim2(Main_Series)))
 
-nodegoat_series <- kartoteka_serii %>% 
+nodegoat_series <- kartoteka_serii  %>% 
   mutate(Series_Title = ifelse(str_count(Series_Title,"\\[")>str_count(Series_Title,"\\]"),str_remove_all(Series_Title,"^\\["),
                                ifelse(str_count(Series_Title,"\\[")<str_count(Series_Title,"\\]"),str_remove_all(Series_Title,"\\]$"),paste3(Series_Title))),
          Creator = ifelse(str_count(Creator,"\\[")>str_count(Creator,"\\]"),str_remove_all(Creator,"^\\["),
@@ -2409,7 +2473,7 @@ nodegoat_series <- kartoteka_serii %>%
   mutate(nr_zapisu = str_extract(group,"\\d+(?!.*\\d+)")) %>% 
   left_join(bn_books %>% select(id,X210) %>% mutate(id=as.character(id)),by = c("nr_zapisu"="id")) %>% 
   mutate(X210 = str_remove_all(str_extract(X210,"(?<=%a)(.*?)(?= %)"),"^\\[|\\]$")) %>% 
-  left_join(nodegoat_institutions %>% select(Project_ID_institution=Project_ID,Entity_Name,Located_Location) %>% cSplit(.,"Entity_Name",sep = "|",direction = "long"),by = c("Creator"="Entity_Name","X210"="Located_Location")) %>%  
+  left_join(nodegoat_institutions %>% select(Project_ID_institution=Project_ID,Entity_Name,Located_Location) %>% cSplit(.,"Entity_Name",sep = "|",direction = "long"),by = c("Creator"="Entity_Name","X210"="Located_Location")) %>% 
   left_join(nodegoat_institutions %>% select(Project_ID_institution2=Project_ID,Entity_Name) %>% cSplit(.,"Entity_Name",sep = "|",direction = "long"),by = c("Creator"="Entity_Name")) %>% 
   mutate(Project_ID_institution = ifelse(!is.na(Project_ID_institution),paste3(Project_ID_institution),
                                          ifelse(is.na(Project_ID_institution)&!is.na(Project_ID_institution2),paste3(Project_ID_institution2),NA))) %>% 
@@ -2424,9 +2488,39 @@ nodegoat_series <- kartoteka_serii %>%
          group = paste(unique(na.omit(group)),collapse = "|")) %>% 
   ungroup() %>% 
   unique() %>% 
-  mutate(Project_ID = 1:n())
+  mutate(Project_ID = sprintf("%05d", 1:n())) %>% 
+  mutate(Sub_Series = ifelse(Sub_Series == "", "|", as.character(Sub_Series)),
+         Main_Series = ifelse(Main_Series == "", "|", as.character(Main_Series))) %>% 
+  cSplit("Series_Title",sep = "|",direction = "long") %>% 
+  cSplit("Sub_Series",sep = "|",direction = "long") %>% 
+  cSplit("Main_Series",sep = "|",direction = "long") %>% 
+  filter(!(is.na(Series_Title) & is.na(Sub_Series) & is.na(Main_Series)))
   
-write.csv2(nodegoat_series, file = "C:/Users/Cezary/Desktop/nodegoat_series.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+nodegoat_series <- nodegoat_series %>% 
+  left_join(nodegoat_series %>% select(Project_ID_sub = Project_ID, Series_Title, Main_Series), by = c("Sub_Series" = "Series_Title", "Series_Title" = "Main_Series"))
+nodegoat_series <- nodegoat_series %>% 
+  left_join(nodegoat_series %>% select(Project_ID_main = Project_ID, Series_Title, Sub_Series), by = c("Main_Series" = "Series_Title", "Series_Title" = "Sub_Series")) %>% 
+  mutate(Sub_Series = ifelse(Sub_Series!="",as.character(Project_ID_sub),""),
+         Main_Series = ifelse(Main_Series!="",as.character(Project_ID_main),"")) %>% 
+  select(-Project_ID_sub, -Project_ID_main)
+  
+nodegoat_series[nodegoat_series==""] <- NA  
+nodegoat_series <- nodegoat_series %>% 
+  group_by(Project_ID) %>% 
+  summarise_each(funs(paste(unique(na.omit(.)), collapse = "|")))
+  
+write.csv2(nodegoat_series, file = "C:/Users/Cezary/Desktop/nodegoat_series.csv", row.names = F, na = '', fileEncoding = 'UTF-8', quote = FALSE)
+
+nodegoat_series <- nodegoat_series %>% 
+  mutate(Sub_Series = ifelse(Sub_Series == "", "|", as.character(Sub_Series)),
+         Main_Series = ifelse(Main_Series == "", "|", as.character(Main_Series))) %>% 
+  cSplit("Main_Series",sep = "|",direction = "long") %>% 
+  cSplit("Sub_Series",sep = "|",direction = "long") %>% 
+  filter(!is.na(Sub_Series)|!is.na(Main_Series)) %>% 
+  mutate(Sub_Series = ifelse(is.na(Sub_Series), NA, sprintf("%05d", Sub_Series)),
+         Main_Series = ifelse(is.na(Main_Series), NA, sprintf("%05d", Main_Series)))
+
+write.csv2(nodegoat_series, file = "C:/Users/Cezary/Desktop/nodegoat_series_relations.csv", row.names = F, na = '', fileEncoding = 'UTF-8', quote = FALSE)
 
 ```
 
