@@ -280,7 +280,7 @@ bn_ks <- bn_ks %>%
 #jeśli obiekt bezpiecznik jest pusty - to wszystko okej
 # sprawdz czy id tworcy z ktorejs tabeli na dysku istnieje w bazie oracle, jesli nie, wklej id tworcy z oracla do tabeli lub - jeśli nie ma takiego twórcy w bazie usuń wiersz w tabeli. Następnie dopisz fragment kodu, by usunąć kolumny osoba_bn_autor i osoba_bn_temat (po tej operacji usuń dopisany kod) i uruchom chunk ponownie
 
-# bn_ks <- bn_ks %>% 
+# bn_ks <- bn_ks %>%
 #   select(-osoba_bn_autor,-osoba_bn_temat)
 
 bezpiecznik <- bn_ks %>% 
@@ -6666,7 +6666,10 @@ za_opis_wspoltworcow <- BN_wspoltworca %>%
 #8 wydanie
 marc_field_250 <- data %>%
   select(ZA_UWAGI,X250)%>%
-  filter(X250!="") %>%
+  filter(X250!="")
+
+if (nrow(marc_field_250) != 0){
+marc_field_250 <- marc_field_250 %>%
   mutate(X250=str_replace_all(X250,"(^|\\|)","~\\1")) %>%
   cSplit(.,"X250",sep = "~",direction = "long") %>%
   filter(X250!="") %>%
@@ -6685,6 +6688,7 @@ for (i in x) {
   progress(match(i,x), max.value = length(x)) 
   marc_field_250$X250 <- str_replace(marc_field_250$X250,subfield_list_char[i],"|\\1")
 }
+
 for (i in x) {
   progress(match(i,x), max.value = length(x)) 
   subfield_list_char2 <- str_replace_all(subfield_list,"\\$","\\\\$")
@@ -6694,11 +6698,16 @@ for (i in x) {
   string <- paste(string_a,string_b,string_c,sep = "")
   marc_field_250[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_250$X250),str_replace_all(gsub(string,"\\3",marc_field_250$X250),"\\${2}.", "~"),NA)
 }
-
 za_wydanie <- marc_field_250 %>%
   select(ZA_UWAGI, wydanie = `$a`) %>%
   mutate(wydanie = str_remove(wydanie," \\/$")) %>%
   right_join(.,data %>% select(ZA_UWAGI),by="ZA_UWAGI")
+} else {
+  za_wydanie <- data.frame(ZA_UWAGI = "", X250 = "", indicator = "", stringsAsFactors = FALSE) %>% 
+    mutate(`$a` = "",
+           wydanie = "") %>% 
+    right_join(.,data %>% select(ZA_UWAGI),by="ZA_UWAGI")
+}
 
 #9: instytucja sprawcza
 marc_field_245 <- data %>%
@@ -6879,7 +6888,10 @@ marc_field_500 <- marc_field_500 %>%
 #pole 546 do opisu fizycznego
 marc_field_546 <- data %>%
   select(ZA_UWAGI,X546)%>%
-  filter(X546!="") %>%
+  filter(X546!="")
+
+if (nrow(marc_field_546) != 0){
+marc_field_546 <- marc_field_546 %>%
   mutate(X546=str_replace_all(X546,"(^|\\|)","~\\1")) %>%
   cSplit(.,"X546",sep = "~",direction = "long") %>%
   filter(X546!="") %>%
@@ -6909,6 +6921,10 @@ for (i in x) {
 }
 marc_field_546 <- marc_field_546 %>%
   mutate(`$a` = str_remove(`$a`," \\;+$| \\:+$"))
+} else {
+  marc_field_546 <- data.frame(ZA_UWAGI = "", X546 = "", indicator = "", stringsAsFactors = FALSE) %>% 
+    mutate(`$a` = "")
+}
 
 if("$e" %in% colnames(marc_field_300)) {
 za_opis_ks <- data %>%
@@ -7000,6 +7016,8 @@ for (i in x) {
   string <- paste(string_a,string_b,string_c,sep = "")
   marc_field_490[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_490$X490),str_replace_all(gsub(string,"\\3",marc_field_490$X490),"\\${2}.", "~"),NA)
 }
+
+if ("$v" %in% colnames(marc_field_490)){
 za_seria_wydawnicza <- marc_field_490 %>%
   mutate(`$a` = str_replace_all(`$a`,"(=)(\\$a)","\\1 "),
          `$a` = str_remove(`$a`," \\;+$| \\:+$"),
@@ -7014,6 +7032,21 @@ za_seria_wydawnicza <- marc_field_490 %>%
   unique() %>%
   mutate(seria = str_replace_all(seria,"\\$.","; ")) %>%
   right_join(.,data %>% select(ZA_UWAGI),by="ZA_UWAGI")
+} else {
+  za_seria_wydawnicza <- marc_field_490 %>%
+  mutate(`$a` = str_replace_all(`$a`,"(=)(\\$a)","\\1 "),
+         `$a` = str_remove(`$a`," \\;+$| \\:+$")) %>%
+  filter(!is.na(`$a`)) %>%
+  mutate(seria = str_remove(paste("(",`$a`,")",sep = ""),"; (?=\\)$)"),
+         seria = gsub("( : )(.)",". \\U\\2",perl=TRUE,seria)) %>%
+  select(ZA_UWAGI,seria) %>%
+  group_by(ZA_UWAGI) %>%
+  mutate(seria = paste(seria,collapse = " ")) %>%
+  ungroup() %>%
+  unique() %>%
+  mutate(seria = str_replace_all(seria,"\\$.","; ")) %>%
+  right_join(.,data %>% select(ZA_UWAGI),by="ZA_UWAGI")
+}
 
 #13: tomy
 za_tomy <- data %>%
