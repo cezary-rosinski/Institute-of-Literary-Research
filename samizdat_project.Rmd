@@ -2524,4 +2524,14 @@ write.csv2(nodegoat_series, file = "C:/Users/Cezary/Desktop/nodegoat_series_rela
 
 ```
 
+```{r ksiazki do nodegoata}
+#title
+#bn books
+write.csv2(bn_books, file = "C:/Users/Cezary/Desktop/bn_books.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(cz_books, file = "C:/Users/Cezary/Desktop/cz_books.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(cz_articles, file = "C:/Users/Cezary/Desktop/cz_articles.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(pbl_books, file = "C:/Users/Cezary/Desktop/pbl_books.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+write.csv2(pbl_articles, file = "C:/Users/Cezary/Desktop/pbl_articles.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+```
+
 
