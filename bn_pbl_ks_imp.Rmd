@@ -7246,7 +7246,7 @@ bezpiecznik
 UWAGA!
 Najpierw należy przeprowadzić import do bazy, a następnie egzekwować poniższą część kodu
 
-```{r ręczna korekrta importu}
+```{r ręczna korekta importu}
 #w formularzu książkowym wyszukaj w polu uwag frazę '%akceptuje:NA%' i - jeśli takowa wystąpi - zastąp NA imieniem właściwego pracownika
 #wiem, że to skasowaliśmy, ale doszedłem do wniosku, że jednak warto to sprawdzić
 ```
@@ -7263,8 +7263,8 @@ nadpisanie_zapisow_IOK <- nadpisanie_zapisow_IOK %>%
                              "select z.za_zapis_id, z.za_status_imp, z.za_uwagi
                               from pbl_zapisy z
                               where za_uwagi like 'BN: %'
-                              and z.za_url_bn is not null") %>% mutate(ZA_UWAGI = str_extract(ZA_UWAGI,"(?<=BN: )(.*?)(?=, import)")),by=c("rekord_BN"="ZA_UWAGI")) %>% 
-  filter(grepl(paste("^BN\\: ",import_year, sep = ""),rekord_BN)) %>% 
+                              and z.za_url_bn is not null") %>% mutate(ZA_UWAGI = str_extract(ZA_UWAGI,"(?<=BN: )(.*?)(?=, import)")),by=c("rekord_BN"="ZA_UWAGI")) %>%
+  #filter(grepl(paste("^BN\\: ",import_year, sep = ""),rekord_BN)) %>% 
   rename(jest = ZA_STATUS_IMP) %>% 
   mutate(ID2 = NA) %>% 
   select(ZA_ZAPIS_ID,ID2,jest,powinno_byc)
@@ -7375,7 +7375,7 @@ pbl_bn_import <- pbl_bn_import %>%
 #aktualizacja - ręcznie uzupełnij identyfikatory dla osób BN, które nie zostały znalezione automatycznie (szukaj przy użyciu/z wykluczeniem znaków diakrytycznych, po fragmentach stringów)
 #szukaj w schemacie:http://data.bn.org.pl/api/authorities.json?limit=100&name=Karl%20Ove%20(1968-%20) podmieniając wartości po "name="
 # jeśli niemo zliwe jest ustalenie id w obiekcie reczne_uzupelnienie w odpowiednim miejscu wstaw frazę "brak danych (CR)"
-reczne_uzupelnienie <- c(1098768,2525865,1212662,2550093,2838554,1700782,2705401,2535187,"brak danych (CR)",3183246,2259454,2428820,3134025,"brak danych (CR)",2884785,1070066,"brak danych (CR)",2818578,2437406,1182189,1624489,"brak danych (CR)","brak danych (CR)",2520519,2812495,"brak danych (CR)")
+reczne_uzupelnienie <- c(2488151,1774321,2311826,2474126,2537117,2005481,3841611,2555443,1030660,2481331,3545550,3580860,2477375,2522616,1070200,3437841,2757544,3178700,3437289,2477813,3785521,2529655,2520672,3669925,3669707,3690518,2596742,2562754,3710202,2513900,2626827,1120002,3173074,2551292,2266468,1135350,2477692,3613977,3593836,2525656,3785234,2005095,2550402,3602078,3399448,3763361,2422592,1618255,"brak danych (CR)","brak danych (CR)",1913543,1185354,2936352,3771756,2666784,2496855,1000000011134,2579876,3138659,3067784,2546175,1273260,2507687,3218422,2710432,1000000023175,1000000022874,1000000040129,1000000045524,2450776,3437841,"brak danych (CR)",2852910,1000000702644,2428454,2494438,2543072,"brak danych (CR)",1178674,2692520,"brak danych (CR)",2476425,1666811,2537111,1796473,2638235,1114158,2595197)
 pbl_bn_import_fix$id <- reczne_uzupelnienie
 pbl_bn_import <- pbl_bn_import %>% 
   bind_rows(pbl_bn_import_fix %>% filter(id != "brak danych (CR)"))
