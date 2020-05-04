@@ -564,6 +564,15 @@ ks_zabawki <- bn_ok %>%
 bn_ok <- sqldf("select *
                from bn_ok a
                where a.id not in (select b.id from ks_zabawki b)")
+
+# usunięcie książek dotyczących glottodydaktyki
+ks_glottodydaktyka <- bn_ok %>% 
+  filter(str_detect(tolower(X490), "język polski dla cudzoziemców|czytaj po polsku : materiały pomocnicze do nauki języka polskiego jako obcego|testy ogólne i specjalistyczne z języka polskiego jako obcego|kultura i język polski dla cudzoziemców|czytaj po polsku") | str_detect(tolower(X830), "język polski dla cudzoziemców|kultura i język polski dla cudzoziemców|czytaj po polsku"))
+
+bn_ok <- sqldf("select *
+               from bn_ok a
+               where a.id not in (select b.id from ks_glottodydaktyka b)")
+
 chunk3 <- bn_ok
 ```
 
@@ -571,6 +580,7 @@ chunk3 <- bn_ok
 bn_ok <- chunk3
 #pobranie starych list książek z importu
 #aktualizacja - uzupełnij ostatni brakujący zaimportowany rocznik
+listy_2011 <- sheets_read(ss = "1s22ClRxlrPHaAXi_n_JJH3mX6vKYzKjsKbpJpQztx_8", sheet = "lista_ksiazek")
 listy_2010 <- sheets_read(ss = "1Vjeg0JsYI-8v9B-x_yyujIhmw7UR7Lk7poexrHNdVzM", sheet = "lista_ksiazek")
 listy_2009 <- sheets_read(ss = "1Gc4gQSm9b4NDTQysiauzW9Jac6yP0oNuFbB8utO4kS4", sheet = "lista_ksiazek")
 listy_2005 <- sheets_read(ss = "1HkWkX61sQWktSXf0v0uPV8j2DwuTocesyCJuKTdisIU", sheet = "lista_ksiazek")
@@ -591,6 +601,7 @@ listy_2004 <- merge(listy_2004,do2004,by = "ZA_ZAPIS_ID",all.x = TRUE) %>%
   select(pracownik,ZA_ZAPIS_ID,typ_ksiazki, link, link_1, rok, status, blad_w_imporcie_tytulu, X100, X245, X650, X655, X246, X250, X260, X300, X380, X490, X500, X501, X546, X600, X700, X041, X080)
 #zapewnienie tych samych nazw kolumn
 #aktualizacja - wprowadź wiersz dla ostatniego zaimportowanego rocznika
+colnames(listy_2011) <- names(listy_2004)
 colnames(listy_2010) <- names(listy_2004)
 colnames(listy_2009) <- names(listy_2004)
 colnames(listy_2005) <- names(listy_2004)
@@ -609,7 +620,7 @@ zapisy <- RJDBC::dbGetQuery(PBL,
   mutate(pracownik_pbl = str_extract(ZA_UWAGI, "(?<=akceptuje:)([A-Z]*)")) %>%
   select(ZA_ZAPIS_ID,pracownik_pbl,ZA_STATUS_IMP,ZA_ADNOTACJE)
 #aktualizacja - dodaj do skryptu listę z ostatnim brakującym zaimportowanym rocznikiem
-do_importu_NIE <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009, listy_2010) %>%
+do_importu_NIE <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009, listy_2010, listy_2011) %>%
   full_join(.,zapisy,by = "ZA_ZAPIS_ID") %>%
   select(X650,X655,ZA_STATUS_IMP,ZA_ADNOTACJE) %>%
   mutate(X650 = str_remove_all(X650,"\\\\7"),
@@ -667,7 +678,7 @@ bn_ok <- sqldf("select *
 
 #czy próbować wyrzucać po UKD, które dostawało tylko INO?
 #aktualizacja - dodaj do skryptu listę z ostatnim brakującym zaimportowanym rocznikiem
-do_importu_NIE2 <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009, listy_2010) %>%
+do_importu_NIE2 <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009, listy_2010, listy_2011) %>%
   full_join(.,zapisy,by = "ZA_ZAPIS_ID") %>%
   select(X080,ZA_STATUS_IMP) %>%
   mutate(X080 = str_remove_all(X080,"\\\\")) %>%
@@ -767,7 +778,7 @@ rekordy_podmiotowe_stare <- dbGetQuery(PBL,
                                         where rz.rz_rodzaj_id=1
                                         and z.za_uwagi like '%import%'")
 #aktualizacja - dodaj do skryptu listę z ostatnim brakującym zaimportowanym rocznikiem
-gatunki_poprzednie_imp <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009, listy_2010) %>% 
+gatunki_poprzednie_imp <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009, listy_2010, listy_2011) %>% 
   filter(ZA_ZAPIS_ID %in% rekordy_podmiotowe_stare$ZA_ZAPIS_ID) %>% 
   mutate(X655 = ifelse(rok==2004,str_remove_all(str_replace_all(X655,"(\\$a)","\\\\#7\\1"),"#"),as.character(X655))) %>% 
   select(X655) %>% 
@@ -1445,7 +1456,7 @@ zapisy <- RJDBC::dbGetQuery(PBL,
   select(-ZA_UWAGI)
 nazwy_lit_obcych <- str_replace_all(paste(PBL_literatury_obce$nazwa,collapse = "|"),"\\(","\\\\(")
 #aktualizacja - dodaj do skryptu listę z ostatnim brakującym zaimportowanym rocznikiem
-poprzednie_importy <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009, listy_2010) %>%
+poprzednie_importy <- rbind(listy_2004,listy_2005,listy_2006,listy_2007,listy_2008, listy_2009, listy_2010, listy_2011) %>%
   full_join(.,zapisy,by = "ZA_ZAPIS_ID") %>%
   select(ZA_ZAPIS_ID,X650,X655,DZ_DZIAL_ID,DZ_NAZWA,RZ_RODZAJ_ID,RZ_NAZWA,pracownik_pbl,ZA_STATUS_IMP) %>%
   mutate(X650 = str_remove_all(X650,"\\\\7"),
@@ -7304,7 +7315,7 @@ write.xlsx(rocznik_pbl_po_imporcie, paste("C:/Users/",employee_name,"/Desktop/ks
 ```
 
 ```{r aktualizacja relacji osób PBL-BN}
-#TUTAJ - zrobić dopiero po imporcie 2010!!!
+#TUTAJ - zrobić dopiero po imporcie!!!
 #bazować na bn_ok z zapytaniem SQL dzięki zawartości pola bn rekord
 #zaktualizować plik na dysku: "mapowanie_osob_bn_pbl_po_imporcie" o nowe relacje osobowe pbl-bn
 bn_ok <- chunk11
@@ -7375,7 +7386,7 @@ pbl_bn_import <- pbl_bn_import %>%
 #aktualizacja - ręcznie uzupełnij identyfikatory dla osób BN, które nie zostały znalezione automatycznie (szukaj przy użyciu/z wykluczeniem znaków diakrytycznych, po fragmentach stringów)
 #szukaj w schemacie:http://data.bn.org.pl/api/authorities.json?limit=100&name=Karl%20Ove%20(1968-%20) podmieniając wartości po "name="
 # jeśli niemo zliwe jest ustalenie id w obiekcie reczne_uzupelnienie w odpowiednim miejscu wstaw frazę "brak danych (CR)"
-reczne_uzupelnienie <- c(2488151,1774321,2311826,2474126,2537117,2005481,3841611,2555443,1030660,2481331,3545550,3580860,2477375,2522616,1070200,3437841,2757544,3178700,3437289,2477813,3785521,2529655,2520672,3669925,3669707,3690518,2596742,2562754,3710202,2513900,2626827,1120002,3173074,2551292,2266468,1135350,2477692,3613977,3593836,2525656,3785234,2005095,2550402,3602078,3399448,3763361,2422592,1618255,"brak danych (CR)","brak danych (CR)",1913543,1185354,2936352,3771756,2666784,2496855,1000000011134,2579876,3138659,3067784,2546175,1273260,2507687,3218422,2710432,1000000023175,1000000022874,1000000040129,1000000045524,2450776,3437841,"brak danych (CR)",2852910,1000000702644,2428454,2494438,2543072,"brak danych (CR)",1178674,2692520,"brak danych (CR)",2476425,1666811,2537111,1796473,2638235,1114158,2595197)
+reczne_uzupelnienie <- c(2765929, 3649977, 2786810, 2605520, 3689766, 2823171, 2792556, 2766994, 2634324, 3592064, 3585580, 3613774, 2696408, 3847202, 1971301, 2691380, 3437017, 1174585, 1069065, 3582672, 2768841, 3794149, 2646124, 2654208, 3737322, 3671430, 2557743, 2281148, 3688912, 2319924, 2253422, 2981426, 2506316, 2670050, 2777795, 3689394, 1104406, 3690794, 2593203, 2603250, 3428978, 2647968, 3745919, 1913543, 2672858, 2657360, 3488205, 3689219, 2673127, 3742898, 1113842, 2838554, 2571213, 3080143, 2954229, 3070765, 1263048, 1112879, 3731300, 3643815, 2689671, 2618579, 2821534, 2638139, 2671339, 1834841, 2718281, 2597709, 2981319, 2684222, 2311826, 2752239, 3718134, 2792653, 2686901, 2642331, 3835809, 2617564, 3689166, 2866679, 2845987, 3688926, 3716499, 2636123, 2682447, 3578479, 3641144, 2718274, 3669958, 3718156, 3768850, 3613683, 3719337, 3260494, 2660087, 3689612, 2176545, 1683477, 3626352, "brak danych (CR)", "brak danych (CR)", "brak danych (CR)", "brak danych (CR)", 1000000028663, "brak danych (CR)", 3065133, "brak danych (CR)", "brak danych (CR)", 3092990, 2588979, 3010453, 2609754, 2431531, 2660815, 1187059, 2794040, 2786711)
 pbl_bn_import_fix$id <- reczne_uzupelnienie
 pbl_bn_import <- pbl_bn_import %>% 
   bind_rows(pbl_bn_import_fix %>% filter(id != "brak danych (CR)"))
