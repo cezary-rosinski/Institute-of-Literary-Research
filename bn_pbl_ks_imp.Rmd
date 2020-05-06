@@ -559,11 +559,12 @@ bn_ok <- sqldf("select *
 
 #usunięcie książek zabawek, do kolorowania, dla małych dzieci, z naklejkami, które nie mają żadnego deskryptora gatunkowego
 ks_zabawki <- bn_ok %>% 
-  filter((str_count(X655,"\\$a")==1&grepl("Książka zabawka|Książki dla małych dzieci|Książka do kolorowania|Książka z naklejkami|Książki dla przedszkolaków|Wydawnictwa dla dzieci",X655))|str_count(X655,"\\$a")==2&grepl("Książka obrazkowa",X655)&grepl("Książki dla małych dzieci",X655)|str_count(X655,"\\$a")==2&grepl("Książka do kolorowania",X655)&grepl("Publikacje dla dzieci",X655)|str_count(X655,"\\$a")==2&grepl("Książki zabawki",X655)&grepl("Wycinanki",X655)|str_count(X655,"\\$a")==2&grepl("Książki dla małych dzieci",X655)&grepl("Publikacje dla dzieci",X655))
+  filter((str_count(X655,"\\$a")==1&grepl("Książka zabawka|Książki dla małych dzieci|Książka do kolorowania|Książka z naklejkami|Książki dla przedszkolaków|Wydawnictwa dla dzieci",X655))|str_count(X655,"\\$a")==2&grepl("Książka obrazkowa",X655)&grepl("Książki dla małych dzieci",X655)|str_count(X655,"\\$a")==2&grepl("Książka do kolorowania",X655)&grepl("Publikacje dla dzieci",X655)|str_count(X655,"\\$a")==2&grepl("Książki zabawki",X655)&grepl("Wycinanki",X655)|str_count(X655,"\\$a")==2&grepl("Książki dla małych dzieci",X655)&grepl("Publikacje dla dzieci",X655)|str_count(X655,"\\$a")==2&grepl("Książka zabawka",X655)&grepl("Książki dla małych dzieci",X655)|str_count(X655,"\\$a")==2&grepl("Książka zabawka",X655)&grepl("Publikacje dla dzieci",X655))
 
 bn_ok <- sqldf("select *
                from bn_ok a
                where a.id not in (select b.id from ks_zabawki b)")
+
 
 # usunięcie książek dotyczących glottodydaktyki
 ks_glottodydaktyka <- bn_ok %>% 
