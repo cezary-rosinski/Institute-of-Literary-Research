@@ -102,7 +102,7 @@ write.xlsx(test, "C:/Users/Cezary/Desktop/pavla_blognovel.xlsx",sheetName = "got
 #second web scraping
 #browser
 #list_versions("chromedriver")
-rD <- rsDriver(port=4444L,browser="chrome", chromever="79.0.3945.36")
+rD <- rsDriver(port=4444L,browser="chrome", chromever="81.0.4044.69")
 remDr <- rD$client
 #annun
 # page2 <- data.frame(url = c("http://www.saspi.cz/kniha-sbirka/155-o-princi-a-bilem-jednorozci","http://www.saspi.cz/kniha-sbirka/592-cesta-za-bilou-lodi-cast-1","http://www.saspi.cz/kniha-sbirka/155-zlaty-drak-1c","http://www.saspi.cz/kniha-sbirka/591-narod-prokletych","http://www.saspi.cz/kniha-sbirka/490-cerny-jezdec-ruka-spravedlnosti-01","http://www.saspi.cz/kniha-sbirka/676-enyalie-or-ohta-1","http://www.saspi.cz/kniha-sbirka/1401-omalora-1"),number=1:7,stringsAsFactors = FALSE)
@@ -110,8 +110,10 @@ remDr <- rD$client
 # page2 <- data.frame(url = c("http://www.saspi.cz/kniha-sbirka/227-zivot-za-zivot-pomsta-za-pritele","http://www.saspi.cz/kniha-sbirka/2118-plamen-hvezd-kapitola-1-a-2"),number=1:2,stringsAsFactors = FALSE)
 # #jackie decker
 # page2 <- data.frame(url = c("http://www.saspi.cz/kniha-sbirka/632-pred-svetem-na-uteku-1-kapitola","http://www.saspi.cz/kniha-sbirka/872-hranice-nekonecna","http://www.saspi.cz/kniha-sbirka/954-kniha-osudu-cesta-bez-konce-prolog","http://www.saspi.cz/kniha-sbirka/1337-nepoznane-proroctvi-1kapitola","http://www.saspi.cz/kniha-sbirka/1689-z-rozhodnuti-rady","http://www.saspi.cz/kniha-sbirka/1677-prolog","http://www.saspi.cz/kniha-sbirka/1756-draci-stezka-prolog","http://www.saspi.cz/kniha-sbirka/1124-pikova-dama-prolog-a-1kapitola","http://www.saspi.cz/kniha-sbirka/2197-stripky-pribehu-1"),number=1:9,stringsAsFactors = FALSE)
-#iserbius
-page2 <- data.frame(url = c("http://www.saspi.cz/kniha-sbirka/1831-cernaruske-pribehy-jake-kowalski-prolog","http://www.saspi.cz/kniha-sbirka/1832-archon-1-kapitola-pocatek-valky","http://www.saspi.cz/kniha-sbirka/1974-redforce-vytrzeni-z-nudy","http://www.saspi.cz/kniha-sbirka/2043-prilis-divoka-zeme-1","http://www.saspi.cz/kniha-sbirka/2048-archon-twin-kanes-prolog","http://www.saspi.cz/kniha-sbirka/2262-pisen-preziti-prolog"),number=1:6,stringsAsFactors = FALSE)
+# iserbius
+# page2 <- data.frame(url = c("http://www.saspi.cz/kniha-sbirka/1831-cernaruske-pribehy-jake-kowalski-prolog","http://www.saspi.cz/kniha-sbirka/1832-archon-1-kapitola-pocatek-valky","http://www.saspi.cz/kniha-sbirka/1974-redforce-vytrzeni-z-nudy","http://www.saspi.cz/kniha-sbirka/2043-prilis-divoka-zeme-1","http://www.saspi.cz/kniha-sbirka/2048-archon-twin-kanes-prolog","http://www.saspi.cz/kniha-sbirka/2262-pisen-preziti-prolog"),number=1:6,stringsAsFactors = FALSE)
+# missing data
+page2 <- data.frame(url = c("http://www.saspi.cz/kniha-sbirka/228-vystrely-na-divokem-zapade", "http://www.saspi.cz/kniha-sbirka/1088-ztracena"), number=1:2, stringsAsFactors = FALSE)
 
 total <- data.frame(stringsAsFactors = FALSE)
 y <- 1:nrow(page2)
@@ -135,6 +137,8 @@ x <- 1:nrow(set)
 for (i in x) {
   progress(match(i,x), max.value = length(x))
   link <- remDr$findElement(using = 'css selector', paste("table.text_main table.list tbody:nth-child(1) tr:nth-child(",i+1,") td:nth-child(2) > a:nth-child(1)",sep = ""))
+  if (link$getElementText() != "Ztracená 18. část") {
+    
   link$clickElement()
   user_name <- remDr$findElements(using = 'css selector', ".change_nl b")
   user_name <- sapply(user_name, function(x) x$getElementText())
@@ -177,6 +181,7 @@ total <- rbind(total,iteration)
 remDr$goBack()
 }
 }
+}
 total$novel_id <- cumsum(!duplicated(total[5]))
 
 count <- as.data.frame(table(total$user_name))
@@ -194,7 +199,7 @@ blabla$distance[i] <- length(seq(from=as.Date(total$date_of_chapter[i], "%d.%m.%
   blabla$distance[i] <<- "error"
 })
 }
-write.xlsx(blabla, "C:/Users/Cezary/Desktop/pavla_iserbius.xlsx",sheetName = "sheet")
+write.xlsx(blabla, "C:/Users/Cezary/Desktop/pavla_missing_data.xlsx",sheetName = "sheet")
 
 
 ```
