@@ -1,0 +1,713 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r połączenie z bazą PBL}
+rm(list =ls())
+options(java.parameters = "-Xmx8000m")
+library(RJDBC)
+library(sqldf)
+library(stringr)
+library(tidyverse)
+getwd()
+jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath="E:/Cezary/Documents/ojdbc6.jar")
+PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "IBL_SELECT", "CR333444")
+
+
+```
+```{r wydobycie list osób}
+marlena <- read.csv2("C:/Users/Cezary/Downloads/lista do kwerendy.csv", encoding = "Windows-1250", header = TRUE, stringsAsFactors = FALSE) 
+colnames(marlena) <- c("nazewnictwo", "od_daty")
+nazwa <- data.frame(nazwa = str_to_lower(str_replace_all(marlena$nazewnictwo, "\\W", "")))
+marlena <- data.frame(nazewnictwo = marlena$nazewnictwo, od_daty = as.Date(marlena$od_daty,"%d.%m.%Y"), nazwa = nazwa$nazwa)
+
+pbl_tworcy <- dbReadTable(PBL,'PBL_TWORCY')
+pbl_tworcy <- pbl_tworcy %>%
+  select(1,2,3)
+nazwa <- ifelse(is.na(pbl_tworcy$TW_IMIE),as.character(pbl_tworcy$TW_NAZWISKO),paste(pbl_tworcy$TW_NAZWISKO,pbl_tworcy$TW_IMIE, sep = ""))
+nazwa <- data.frame(nazwa = str_to_lower(str_replace_all(nazwa, "\\W", "")))
+pbl_tworcy <- data.frame(pbl_tworcy, nazwa = nazwa$nazwa)
+
+ujednolicenie_tw <- sqldf("select *
+                       from marlena a
+                       left join pbl_tworcy b on a.nazwa=b.nazwa")
+
+tw_tworca_id <- data.frame(tworca = ujednolicenie_tw$TW_TWORCA_ID, od_daty = ujednolicenie_tw$od_daty)
+tw_tworca_id <- unique(tw_tworca_id)
+tw_tworca_id <- tw_tworca_id %>%
+  filter(!(is.na(tworca)))
+
+pbl_autorzy <- dbReadTable(PBL,'PBL_AUTORZY')
+pbl_autorzy <- pbl_autorzy %>%
+  select(1,3,2)
+nazwa <- ifelse(is.na(pbl_autorzy$AM_IMIE),as.character(pbl_autorzy$AM_NAZWISKO),paste(pbl_autorzy$AM_NAZWISKO,pbl_autorzy$AM_IMIE, sep = ""))
+nazwa <- data.frame(nazwa = str_to_lower(str_replace_all(nazwa, "\\W", "")))
+pbl_autorzy <- data.frame(pbl_autorzy, nazwa = nazwa$nazwa)
+
+ujednolicenie_am <- sqldf("select *
+                       from marlena a
+                       left join pbl_autorzy b on a.nazwa=b.nazwa")
+
+am_autor_id <- data.frame(autor = ujednolicenie_am$AM_AUTOR_ID, od_daty = ujednolicenie_am$od_daty)
+am_autor_id <- unique(am_autor_id)
+am_autor_id <- am_autor_id %>%
+  filter(!(is.na(autor)))
+
+
+pbl_wspoltworcy <- dbReadTable(PBL,'PBL_OSOBY')
+pbl_wspoltworcy <- pbl_wspoltworcy %>%
+  select(1,2,3)
+nazwa <- ifelse(is.na(pbl_wspoltworcy$OS_IMIE),as.character(pbl_wspoltworcy$OS_NAZWISKO),paste(pbl_wspoltworcy$OS_NAZWISKO,pbl_wspoltworcy$OS_IMIE, sep = ""))
+nazwa <- data.frame(nazwa = str_to_lower(str_replace_all(nazwa, "\\W", "")))
+pbl_wspoltworcy <- data.frame(pbl_wspoltworcy, nazwa = nazwa$nazwa)
+
+ujednolicenie_os <- sqldf("select *
+                       from marlena a
+                       left join pbl_wspoltworcy b on a.nazwa=b.nazwa")
+
+os_osoba_id <- data.frame(wspoltworca = ujednolicenie_os$OS_OSOBA_ID, od_daty = ujednolicenie_os$od_daty)
+os_osoba_id <- unique(os_osoba_id)
+os_osoba_id <- os_osoba_id %>%
+  filter(!(is.na(wspoltworca)))
+
+
+pbl_indeks_osobowy <- dbReadTable(PBL,'PBL_OSOBY_DO_INDEKSU')
+pbl_indeks_osobowy <- pbl_indeks_osobowy %>%
+  select(1,3,4)
+nazwa <- ifelse(is.na(pbl_indeks_osobowy$ODI_IMIE),as.character(pbl_indeks_osobowy$ODI_NAZWISKO),paste(pbl_indeks_osobowy$ODI_NAZWISKO,pbl_indeks_osobowy$ODI_IMIE, sep = ""))
+nazwa <- data.frame(nazwa = str_to_lower(str_replace_all(nazwa, "\\W", "")))
+pbl_indeks_osobowy <- data.frame(pbl_indeks_osobowy, nazwa = nazwa$nazwa)
+
+ujednolicenie_oi <- sqldf("select *
+                       from marlena a
+                       left join pbl_indeks_osobowy b on a.nazwa=b.nazwa")
+
+indeks_osobowy <- ujednolicenie_oi %>%
+  select(4,5,6,2)
+indeks_osobowy <- unique(indeks_osobowy)
+indeks_osobowy <- indeks_osobowy %>%
+  filter(!(is.na(ODI_NAZWISKO)))
+
+#write.csv2(tw_tworca_id, "C:/Users/Cezary/Desktop/marlena_tworcy.csv", row.names = F, na = '', fileEncoding = 'Windows-1250')
+#write.csv2(am_autor_id, "C:/Users/Cezary/Desktop/marlena_autorzy.csv", row.names = F, na = '', fileEncoding = 'Windows-1250')
+#write.csv2(os_osoba_id, "C:/Users/Cezary/Desktop/marlena_wspoltworcy.csv", row.names = F, na = '', fileEncoding = 'Windows-1250')
+
+```
+```{r uzyskanie list zapisów z czasopism}
+#twórcy
+
+zapisy_tworcy <- dbGetQuery(PBL,
+                            "select tw.tw_tworca_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_odwolania \"odnosi_sie_do\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", zr.zr_tytul \"czasopismo\", z.za_zrodlo_rok \"rok\", z.za_zrodlo_nr \"numer\", z.za_zrodlo_str \"strony\", z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+    UNION
+    select tw.tw_tworca_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", to_char(null) \"autor_nazwisko\", to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_odwolania \"odnosi_sie_do\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", zr.zr_tytul \"czasopismo\", z.za_zrodlo_rok \"rok\", z.za_zrodlo_nr \"numer\", z.za_zrodlo_str \"strony\", z.za_uzytk_wpis_data \"data_utworzenia\"
+    from pbl_zapisy z
+    join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+    join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+    join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+    join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+    join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+    where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+    and z.za_zapis_id not in (
+        select z.za_zapis_id
+        from pbl_zapisy z
+        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+        join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+        where z.za_uzytk_wpis_data between '1997/01/01' and sysdate)")
+
+zapisy_tworcy <- sqldf("select *
+                       from zapisy_tworcy a
+                       join tw_tworca_id b on a.TW_TWORCA_ID=b.tworca
+                       where a.TW_TWORCA_ID in (b.tworca)")
+zapisy_tworcy <- zapisy_tworcy %>%
+  filter(data_utworzenia>=od_daty) %>%
+  select(-1,-18,-19)
+
+#autorzy
+
+zapisy_autora <- dbGetQuery(PBL,
+                            "select a.am_autor_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_odwolania \"odnosi_sie_do\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", zr.zr_tytul \"czasopismo\",
+        z.za_zrodlo_rok \"rok\", z.za_zrodlo_nr \"numer\", z.za_zrodlo_str \"strony\", z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+    UNION
+    select a.am_autor_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_nazwisko\", to_char(null) \"tworca_imie\", a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_odwolania \"odnosi_sie_do\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", zr.zr_tytul \"czasopismo\", z.za_zrodlo_rok \"rok\", z.za_zrodlo_nr \"numer\", z.za_zrodlo_str \"strony\", z.za_uzytk_wpis_data \"data_utworzenia\"
+    from pbl_zapisy z
+    join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+    join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+    join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+    join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+    join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+    where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+    and z.za_zapis_id not in (
+        select z.za_zapis_id
+            from pbl_zapisy z
+            join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+            join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+            join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+            join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+            join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+            join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+            join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+            where z.za_uzytk_wpis_data between '1997/01/01' and sysdate)")
+
+zapisy_autora <- sqldf("select *
+                       from zapisy_autora a
+                       join am_autor_id b on a.AM_AUTOR_ID=b.autor
+                       where a.AM_AUTOR_ID in (b.autor)")
+zapisy_autora <- zapisy_autora %>%
+  filter(data_utworzenia>=od_daty) %>%
+  select(-1,-18,-19)
+
+#wspoltworcy
+
+zapisy_wspoltworcy <- dbGetQuery(PBL,
+                                "select z.za_zapis_id, os.os_osoba_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", 
+        a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja\", 
+        os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", z.za_adnotacje \"adnotacja\", 
+        zr.zr_tytul \"czasopismo\", z.za_zrodlo_rok \"rok\", z.za_zrodlo_nr \"numer\", z.za_zrodlo_str \"strony\", z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+join IBL_OWNER.pbl_funkcje_osob fo on uo.uo_fo_symbol=fo.fo_symbol
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+UNION
+select z.za_zapis_id, os.os_osoba_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_nazwisko\", to_char(null) \"tworca_imie\", 
+        a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja\", 
+        os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", z.za_adnotacje \"adnotacja\", 
+        zr.zr_tytul \"czasopismo\", z.za_zrodlo_rok \"rok\", z.za_zrodlo_nr \"numer\", z.za_zrodlo_str \"strony\", z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+join IBL_OWNER.pbl_funkcje_osob fo on uo.uo_fo_symbol=fo.fo_symbol
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+and z.za_zapis_id not in (
+        select z.za_zapis_id
+        from pbl_zapisy z
+        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+        join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+        join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+        join IBL_OWNER.pbl_funkcje_osob fo on uo.uo_fo_symbol=fo.fo_symbol
+        where z.za_uzytk_wpis_data between '1997/01/01' and sysdate)
+        UNION
+select z.za_zapis_id, os.os_osoba_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", 
+        to_char(null) \"autor_nazwisko\", to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja\", 
+        os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", z.za_adnotacje \"adnotacja\", 
+        zr.zr_tytul \"czasopismo\", z.za_zrodlo_rok \"rok\", z.za_zrodlo_nr \"numer\", z.za_zrodlo_str \"strony\", z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+join IBL_OWNER.pbl_funkcje_osob fo on uo.uo_fo_symbol=fo.fo_symbol
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+and z.za_zapis_id not in (
+        select z.za_zapis_id
+        from pbl_zapisy z
+        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+        join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+        join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+        join IBL_OWNER.pbl_funkcje_osob fo on uo.uo_fo_symbol=fo.fo_symbol
+        where z.za_uzytk_wpis_data between '1997/01/01' and sysdate)")
+
+zapisy_wspoltworcy2 <- dbGetQuery(PBL,
+                                 "select z.za_zapis_id, os.os_osoba_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_nazwisko\", to_char(null) \"tworca_imie\", 
+        to_char(null) \"autor_nazwisko\", to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja\", 
+        os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", z.za_adnotacje \"adnotacja\", 
+        zr.zr_tytul \"czasopismo\", z.za_zrodlo_rok \"rok\", z.za_zrodlo_nr \"numer\", z.za_zrodlo_str \"strony\", z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+join IBL_OWNER.pbl_funkcje_osob fo on uo.uo_fo_symbol=fo.fo_symbol
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate")
+
+zapisy_wspoltworcy <- sqldf("select *
+                            from zapisy_wspoltworcy a
+                            UNION
+                              select *
+                              from zapisy_wspoltworcy2 b
+                              where b.ZA_ZAPIS_ID not in (
+                                select a.ZA_ZAPIS_ID
+                                from zapisy_wspoltworcy a)")
+zapisy_wspoltworcy <- sqldf("select *
+                       from zapisy_wspoltworcy a
+                       join os_osoba_id b on a.OS_OSOBA_ID=b.wspoltworca
+                       where a.OS_OSOBA_ID in (b.wspoltworca)")
+zapisy_wspoltworcy <- zapisy_wspoltworcy %>%
+  filter(data_utworzenia>=od_daty) %>%
+  select(-1,-2,-21,-22)
+
+#indeks osobowy
+
+zapisy_indeks <- dbGetQuery(PBL,
+                            "select z.za_zapis_id, oi.odi_nazwisko \"indeks_nazwisko\", oi.odi_imie \"indeks_imie\", z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", 
+        a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", 
+        zr.zr_tytul \"czasopismo\", z.za_zrodlo_rok \"rok\", z.za_zrodlo_nr \"numer\", z.za_zrodlo_str \"strony\", z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_osoby_do_indeksu oi on oi.odi_za_zapis_id=z.za_zapis_id
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+UNION
+select z.za_zapis_id, oi.odi_nazwisko \"indeks_nazwisko\", oi.odi_imie \"indeks_imie\", z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_nazwisko\", to_char(null) \"tworca_imie\", 
+        a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", 
+        zr.zr_tytul \"czasopismo\", z.za_zrodlo_rok \"rok\", z.za_zrodlo_nr \"numer\", z.za_zrodlo_str \"strony\", z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_osoby_do_indeksu oi on oi.odi_za_zapis_id=z.za_zapis_id
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+and z.za_zapis_id not in (
+        select z.za_zapis_id
+        from pbl_zapisy z
+        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+        join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+        join IBL_OWNER.pbl_osoby_do_indeksu oi on oi.odi_za_zapis_id=z.za_zapis_id
+        where z.za_uzytk_wpis_data between '1997/01/01' and sysdate)
+        UNION
+select z.za_zapis_id, oi.odi_nazwisko \"indeks_nazwisko\", oi.odi_imie \"indeks_imie\", z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", 
+        to_char(null) \"autor_nazwisko\", to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", 
+        zr.zr_tytul \"czasopismo\", z.za_zrodlo_rok \"rok\", z.za_zrodlo_nr \"numer\", z.za_zrodlo_str \"strony\", z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_osoby_do_indeksu oi on oi.odi_za_zapis_id=z.za_zapis_id
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+and z.za_zapis_id not in (
+        select z.za_zapis_id
+        from pbl_zapisy z
+        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+        join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+        join IBL_OWNER.pbl_osoby_do_indeksu oi on oi.odi_za_zapis_id=z.za_zapis_id
+        where z.za_uzytk_wpis_data between '1997/01/01' and sysdate)")
+
+zapisy_indeks <- sqldf("select *
+                       from zapisy_indeks a
+                       join indeks_osobowy b on a.ZA_ZAPIS_ID=b.ODI_ZA_ZAPIS_ID and a.indeks_nazwisko=b.ODI_NAZWISKO and a.indeks_imie=b.ODI_IMIE")
+
+zapisy_indeks <- zapisy_indeks %>%
+  filter(data_utworzenia>=od_daty) %>%
+  select(-1,-19,-20,-21,-22)
+
+
+write.csv2(zapisy_tworcy, "C:/Users/Cezary/Desktop/marlena_tworcy_cz.csv", row.names = F, na = '', fileEncoding = 'Windows-1250')
+write.csv2(zapisy_autora, "C:/Users/Cezary/Desktop/marlena_autorzy_cz.csv", row.names = F, na = '', fileEncoding = 'Windows-1250')
+write.csv2(zapisy_wspoltworcy, "C:/Users/Cezary/Desktop/marlena_wspoltworcy_cz.csv", row.names = F, na = '', fileEncoding = 'Windows-1250')
+write.csv2(zapisy_indeks, "C:/Users/Cezary/Desktop/marlena_indeks_cz.csv", row.names = F, na = '', fileEncoding = 'Windows-1250')
+```
+
+```{r uzyskanie list zapisów z książek}
+#twórcy
+ks_tworcy <- dbGetQuery(PBL,
+                        "select tw.tw_tworca_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_odwolania \"odnosi_sie_do\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", w.wy_nazwa \"wydawnictwo_nazwa\", w.wy_miasto \"wydawnictwo_miejsce\", z.za_ro_rok \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fiz_ks\", z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+    UNION
+    select tw.tw_tworca_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", to_char(null) \"autor_nazwisko\", to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_odwolania \"odnosi_sie_do\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", w.wy_nazwa \"wydawnictwo_nazwa\", w.wy_miasto \"wydawnictwo_miejsce\", z.za_ro_rok \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fiz_ks\", z.za_uzytk_wpis_data \"data_utworzenia\"
+    from pbl_zapisy z
+    join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+    join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+    join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+	join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+    join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+    join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+    where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+    and z.za_zapis_id not in (
+        select z.za_zapis_id
+        from pbl_zapisy z
+        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+        join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+		join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+        where z.za_uzytk_wpis_data between '1997/01/01' and sysdate)")
+
+ks_tworcy <- sqldf("select *
+                       from ks_tworcy a
+                       join tw_tworca_id b on a.TW_TWORCA_ID=b.tworca
+                       where a.TW_TWORCA_ID in (b.tworca)")
+ks_tworcy <- ks_tworcy %>%
+  filter(data_utworzenia>=od_daty) %>%
+  select(-1,-18,-19)
+
+#autorzy
+
+ks_autorzy <- dbGetQuery(PBL,
+                         "select z.za_zapis_id, a.am_autor_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_odwolania \"odnosi_sie_do\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", w.wy_nazwa \"wydawnictwo_nazwa\", w.wy_miasto \"wydawnictwo_miejsce\", z.za_ro_rok \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fiz_ks\",  z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+    UNION
+    select z.za_zapis_id, a.am_autor_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_nazwisko\", to_char(null) \"tworca_imie\", a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_odwolania \"odnosi_sie_do\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", w.wy_nazwa \"wydawnictwo_nazwa\", w.wy_miasto \"wydawnictwo_miejsce\", z.za_ro_rok \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fiz_ks\",  z.za_uzytk_wpis_data \"data_utworzenia\"
+    from pbl_zapisy z
+    join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+    join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+    join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+	join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+    join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+    join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+    where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+    and z.za_zapis_id not in (
+        select z.za_zapis_id
+            from pbl_zapisy z
+            join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+            join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+            join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+            join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+            join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+			join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+            join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+            join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+            where z.za_uzytk_wpis_data between '1997/01/01' and sysdate)")
+
+ks_autorzy2 <- sqldf("select *
+                       from ks_autorzy a
+                       join am_autor_id b on a.AM_AUTOR_ID=b.autor
+                       where a.AM_AUTOR_ID in (b.autor)")
+ks_autorzy <- sqldf("select *
+                       from ks_autorzy a
+                       join am_autor_id b on a.AM_AUTOR_ID=b.autor
+                       where a.AM_AUTOR_ID in (b.autor)")
+ks_autorzy <- ks_autorzy %>%
+  filter(data_utworzenia>=od_daty) %>%
+  select(-1,-2,-19,-20)
+
+#współtwórcy
+
+ks_wspoltworcy <- dbGetQuery(PBL,
+                             "select z.za_zapis_id, os.os_osoba_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja\", 
+        os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", z.za_adnotacje \"adnotacja\", 
+        w.wy_nazwa \"wydawnictwo_nazwa\", w.wy_miasto \"wydawnictwo_miejsce\", z.za_ro_rok \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fiz_ks\",  z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+join IBL_OWNER.pbl_funkcje_osob fo on uo.uo_fo_symbol=fo.fo_symbol
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+UNION
+select z.za_zapis_id, os.os_osoba_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_nazwisko\", to_char(null) \"tworca_imie\", 
+        a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja\", 
+        os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", z.za_adnotacje \"adnotacja\", 
+        w.wy_nazwa \"wydawnictwo_nazwa\", w.wy_miasto \"wydawnictwo_miejsce\", z.za_ro_rok \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fiz_ks\",  z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+join IBL_OWNER.pbl_funkcje_osob fo on uo.uo_fo_symbol=fo.fo_symbol
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+and z.za_zapis_id not in (
+        select z.za_zapis_id
+        from pbl_zapisy z
+        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+        join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+		join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+        join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+        join IBL_OWNER.pbl_funkcje_osob fo on uo.uo_fo_symbol=fo.fo_symbol
+        where z.za_uzytk_wpis_data between '1997/01/01' and sysdate)
+        UNION
+select z.za_zapis_id, os.os_osoba_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", 
+        to_char(null) \"autor_nazwisko\", to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja\", 
+        os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", z.za_adnotacje \"adnotacja\", 
+        w.wy_nazwa \"wydawnictwo_nazwa\", w.wy_miasto \"wydawnictwo_miejsce\", z.za_ro_rok \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fiz_ks\",  z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+join IBL_OWNER.pbl_funkcje_osob fo on uo.uo_fo_symbol=fo.fo_symbol
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+and z.za_zapis_id not in (
+        select z.za_zapis_id
+        from pbl_zapisy z
+        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+        join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+		join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+        join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+        join IBL_OWNER.pbl_funkcje_osob fo on uo.uo_fo_symbol=fo.fo_symbol
+        where z.za_uzytk_wpis_data between '1997/01/01' and sysdate)")
+
+ks_wspoltworcy2 <- dbGetQuery(PBL,
+                                 "select z.za_zapis_id, os.os_osoba_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_nazwisko\", to_char(null) \"tworca_imie\", 
+        to_char(null) \"autor_nazwisko\", to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", fo.fo_nazwa \"funkcja\", 
+        os.os_nazwisko \"wspoltworca_nazwisko\", os.os_imie \"wspoltworca_imie\", z.za_adnotacje \"adnotacja\", 
+        w.wy_nazwa \"wydawnictwo_nazwa\", w.wy_miasto \"wydawnictwo_miejsce\", z.za_ro_rok \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fiz_ks\",  z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+join IBL_OWNER.pbl_funkcje_osob fo on uo.uo_fo_symbol=fo.fo_symbol
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate")
+
+ks_wspoltworcy <- sqldf("select *
+                            from ks_wspoltworcy a
+                            UNION
+                              select *
+                              from ks_wspoltworcy2 b
+                              where b.ZA_ZAPIS_ID not in (
+                                select a.ZA_ZAPIS_ID
+                                from ks_wspoltworcy a)")
+ks_wspoltworcy <- sqldf("select *
+                       from ks_wspoltworcy a
+                       join os_osoba_id b on a.OS_OSOBA_ID=b.wspoltworca
+                       where a.OS_OSOBA_ID in (b.wspoltworca)")
+ks_wspoltworcy <- ks_wspoltworcy %>%
+  filter(data_utworzenia>=od_daty) %>%
+  select(-1,-2,-21,-22)
+
+#indeks osobowy
+
+ks_indeks <- dbGetQuery(PBL,
+                        "select z.za_zapis_id, oi.odi_nazwisko \"indeks_nazwisko\", oi.odi_imie \"indeks_imie\", z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", 
+        a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", 
+        w.wy_nazwa \"wydawnictwo_nazwa\", w.wy_miasto \"wydawnictwo_miejsce\", z.za_ro_rok \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fiz_ks\",  z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_osoby_do_indeksu oi on oi.odi_za_zapis_id=z.za_zapis_id
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+UNION
+select z.za_zapis_id, oi.odi_nazwisko \"indeks_nazwisko\", oi.odi_imie \"indeks_imie\", z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_nazwisko\", to_char(null) \"tworca_imie\", 
+        a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", 
+        w.wy_nazwa \"wydawnictwo_nazwa\", w.wy_miasto \"wydawnictwo_miejsce\", z.za_ro_rok \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fiz_ks\",  z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_osoby_do_indeksu oi on oi.odi_za_zapis_id=z.za_zapis_id
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+and z.za_zapis_id not in (
+        select z.za_zapis_id
+        from pbl_zapisy z
+        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+        join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+        join IBL_OWNER.pbl_osoby_do_indeksu oi on oi.odi_za_zapis_id=z.za_zapis_id
+        where z.za_uzytk_wpis_data between '1997/01/01' and sysdate)
+        UNION
+select z.za_zapis_id, oi.odi_nazwisko \"indeks_nazwisko\", oi.odi_imie \"indeks_imie\", z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", 
+        to_char(null) \"autor_nazwisko\", to_char(null) \"autor_imie\", z.za_tytul \"tytul\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", 
+        w.wy_nazwa \"wydawnictwo_nazwa\", w.wy_miasto \"wydawnictwo_miejsce\", z.za_ro_rok \"rok_wydania\", z.za_opis_fizyczny_ksiazki \"opis_fiz_ks\",  z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+join IBL_OWNER.pbl_osoby_do_indeksu oi on oi.odi_za_zapis_id=z.za_zapis_id
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+and z.za_zapis_id not in (
+        select z.za_zapis_id
+        from pbl_zapisy z
+        join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+        join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+        join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+        join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_wydawnictwa w on zw.zawy_wy_wydawnictwo_id=w.wy_wydawnictwo_id
+        join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+        join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+        join IBL_OWNER.pbl_osoby_do_indeksu oi on oi.odi_za_zapis_id=z.za_zapis_id
+        where z.za_uzytk_wpis_data between '1997/01/01' and sysdate)")
+
+ks_indeks <- sqldf("select *
+                       from ks_indeks a
+                       join indeks_osobowy b on a.ZA_ZAPIS_ID=b.ODI_ZA_ZAPIS_ID and a.indeks_nazwisko=b.ODI_NAZWISKO and a.indeks_imie=b.ODI_IMIE")
+ks_indeks <- ks_indeks %>%
+  filter(data_utworzenia>=od_daty) %>%
+  select(-1,-19,-20,-21,-22)
+
+write.csv2(ks_tworcy, "C:/Users/Cezary/Desktop/marlena_tworcy_ks.csv", row.names = F, na = '', fileEncoding = 'Windows-1250')
+write.csv2(ks_autorzy, "C:/Users/Cezary/Desktop/marlena_autorzy_ks.csv", row.names = F, na = '', fileEncoding = 'Windows-1250')
+write.csv2(ks_wspoltworcy, "C:/Users/Cezary/Desktop/marlena_wspoltworcy_ks.csv", row.names = F, na = '', fileEncoding = 'Windows-1250')
+write.csv2(ks_indeks, "C:/Users/Cezary/Desktop/marlena_indeks_ks.csv", row.names = F, na = '', fileEncoding = 'Windows-1250')
+```
+
+```{r materiały podpięte pod książki przedmiotowe autorów}
+
+ks_autorzy2 <- ks_autorzy2 %>%
+  select(1,20)
+
+omow_autorow <- dbGetQuery(PBL,
+                            "select a.am_autor_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", tw.tw_nazwisko \"tworca_nazwisko\", tw.tw_imie \"tworca_imie\", a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_za_zapis_id \"odnosi_sie_id\", z.za_opis_odwolania \"odnosi_sie_do\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", zr.zr_tytul \"czasopismo\",
+        z.za_zrodlo_rok \"rok\", z.za_zrodlo_nr \"numer\", z.za_zrodlo_str \"strony\", z.za_uzytk_wpis_data \"data_utworzenia\"
+from pbl_zapisy z
+join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+    UNION
+    select a.am_autor_id, z.za_type \"typ\", rz.rz_nazwa \"rodzaj\", dz.dz_nazwa \"dzial\", to_char(null) \"tworca_nazwisko\", to_char(null) \"tworca_imie\", a.am_nazwisko \"autor_nazwisko\", a.am_imie \"autor_imie\", z.za_tytul \"tytul\", z.za_za_zapis_id \"odnosi_sie_id\", z.za_opis_odwolania \"odnosi_sie_do\", z.za_opis_wspoltworcow \"wspoltworcy\", z.za_adnotacje \"adnotacja\", zr.zr_tytul \"czasopismo\", z.za_zrodlo_rok \"rok\", z.za_zrodlo_nr \"numer\", z.za_zrodlo_str \"strony\", z.za_uzytk_wpis_data \"data_utworzenia\"
+    from pbl_zapisy z
+    join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+    join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+    join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+    join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+    join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+    where z.za_uzytk_wpis_data between '1997/01/01' and sysdate
+    and z.za_zapis_id not in (
+        select z.za_zapis_id
+            from pbl_zapisy z
+            join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+            join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+            join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+            join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+            join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+            join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+            join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+            where z.za_uzytk_wpis_data between '1997/01/01' and sysdate)")
+
+omow_autorow <- sqldf("select *
+             from omow_autorow a
+             join ks_autorzy2 b on a.odnosi_sie_id=b.ZA_ZAPIS_ID")
+
+omow_autorow <- mutate(omow_autorow,
+                       czy_podm = str_detect(omow_autorow$dzial, "osobow"))
+omow_autorow <- omow_autorow %>%
+  filter(data_utworzenia>=od_daty) %>%
+  filter(czy_podm==FALSE) %>%
+  select(-1,-10,-19,-20,-21)
+
+write.csv2(omow_autorow, "C:/Users/Cezary/Desktop/marlena_omówienia_ks_przedmiotowych_autorów.csv", row.names = F, na = '', fileEncoding = 'Windows-1250')
+
+```
