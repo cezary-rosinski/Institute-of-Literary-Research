@@ -137,23 +137,6 @@ remove(pbl_viaf3)
 #bezpiecznik!
 #sprawdź, czy jedno hasło bn nie zasila kilku haseł twórców pbl
 
-# pbl_viaf_test1 <- sheets_read(ss = "1cEz73dGN2r2-TTc702yne9tKfH9PQ6UyAJ2zBSV6Jb0") %>%
-#  filter(czy_ten_sam!="nie") %>%
-#  select(pbl_id, BN_id, BN_name)
-# pbl_viaf_test2 <- sheets_read(ss = "1_Bhwzo0xu4yTn8tF0ZNAZq9iIAqIxfcrjeLVCm_mggM") %>%
-#  filter(czy_ten_sam!="nie") %>%
-#  select(pbl_id, BN_id, BN_name)
-# pbl_viaf_test3 <- sheets_read(ss = "1L-7Zv9EyLr5FeCIY_s90rT5Hz6DjAScCx6NxfuHvoEQ") %>%
-#   filter(czy_ten_sam!="nie") %>%
-#   select(pbl_id, BN_id, BN_name)
-# pbl_viaf_test <- rbind(pbl_viaf_test1,pbl_viaf_test2,pbl_viaf_test3) %>%
-#  arrange(pbl_id) %>%
-#  unique()
-# 
-# count <- as.data.frame(table(pbl_viaf_test$BN_id))
-# pbl_viaf_test_1 <- merge(pbl_viaf_test,count,by.x = "BN_id",by.y = "Var1",all.x = TRUE) %>%
-#  unique()
-
 #bezpiecznik!
 #w obiekcie pbl_viaf_test_1 przy frekwencji większej niż 1 należy przeanalizować grupy, jeśli do tego samego identyfikatora pbl przypisane sa różne identyfikatory bn, które jednak opisują tę samą osobę, to wszystko jest okej; w przeciwnym razie trzeba przeprowadzić korektę w plikach "mapowanie_osob_bn_pbl"
 
@@ -2414,7 +2397,7 @@ bn_ok <- bn_ok %>%
   filter(ZA_UWAGI %notin% slowniki_jezykowe_zle$ZA_UWAGI) %>% 
   filter(ZA_UWAGI %notin% slowniki_biograficzne_zle$ZA_UWAGI)
 chunk11 <- bn_ok
-write.xlsx(final, paste("C:/Users/",employee_name,"/Desktop/",import_year,"_bn_ks_do_libri.xlsx",sep = ""),sheetName = "gotowe")
+write.xlsx(bn_ok, paste("C:/Users/",employee_name,"/Desktop/",import_year,"_bn_ks_do_libri.xlsx",sep = ""),sheetName = "gotowe")
 ```
 
 

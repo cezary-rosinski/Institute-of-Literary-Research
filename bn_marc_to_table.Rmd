@@ -94,6 +94,22 @@ write.csv2(data_full_table, file = "C:/Users/User/Desktop/bn_ks_2011-2019.csv", 
 
 ```
 
+```{r wide z long dla lat 2011-2020}
+bn <- read.csv2("C:/Users/User/Desktop/bn_ks_2011-2019_long.csv", encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) 
+x = 2013:2019
+for (i in x) {
+  progress(match(i,x), max.value = length(x))
+  data_rok <- bn %>% 
+    mutate(rok = ifelse(field == "008", str_sub(content, 8, 11), NA)) %>% 
+    group_by(id) %>% 
+    fill(rok, .direction = "downup") %>% 
+    ungroup() %>% 
+    filter(rok == i)
+  data_rok <- dcast(data_rok, id ~ field, value.var="content")
+  write.csv2(data_rok, file = paste("C:/Users/User/Desktop/bn_ks_", i, ".csv", sep = ""), row.names = F, na = '', fileEncoding = 'UTF-8')
+}
+```
+
 ```{r}
 #zmienić w filtrze rok na właściwy
 data_rok <- data_full %>% 
