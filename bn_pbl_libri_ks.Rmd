@@ -10,7 +10,7 @@ Przed rozpoczęciem pracy wyszukaj frazy "bezpiecznik" i "aktualizacja".
 #install.packages(c("utf8","googlesheets4","zoo","stringr","splitstackshape","plyr","dplyr","sqldf","stringdist","fuzzyjoin","data.table","svMisc","tidyverse","RJDBC","arrangements","tokenizers","openxlsx","jsonlite","pacman"))
 #devtools::install_github("r-lib/gargle")
 employee_name <- readline(prompt="Enter name: ")
-import_year <- readline(prompt="Enter year: ")
+#import_year <- readline(prompt="Enter year: ")
 #biblioteki
 options(java.parameters = "-Xmx32000m")
 options(scipen = 999)
@@ -19,6 +19,181 @@ pacman::p_load(utf8,googlesheets4,zoo,stringr,splitstackshape,plyr,dplyr,sqldf,s
 #połączenie z bazą PBL
 jdbcDriver =JDBC("oracle.jdbc.OracleDriver",classPath=paste("C:/Users/",employee_name,"/Downloads/ojdbc6.jar",sep = ""))
 PBL <- dbConnect(jdbcDriver, "jdbc:oracle:thin:@//pbl.ibl.poznan.pl:1521/xe", "IBL_SELECT", "CR333444")
+
+# needed downloads
+pbl_viaf <- sheets_read(ss = "1cEz73dGN2r2-TTc702yne9tKfH9PQ6UyAJ2zBSV6Jb0") %>%
+  filter(czy_ten_sam!="nie") %>%
+  select(pbl_id, BN_id, BN_name) %>%
+  mutate(BN_name = str_replace_all(BN_name,"\\|\\(", " ("),
+         BN_name = str_replace_all(BN_name, "\\;\\|", "; ")) %>%
+  cSplit(.,"BN_name",sep = "|",direction = "long") %>%
+  filter(BN_name!="")
+pbl_viaf2 <- sheets_read(ss = "1_Bhwzo0xu4yTn8tF0ZNAZq9iIAqIxfcrjeLVCm_mggM") %>%
+  filter(czy_ten_sam!="nie") %>%
+  select(pbl_id, BN_id, BN_name) %>%
+  mutate(BN_name = str_replace_all(BN_name,"\\|\\(", " ("),
+         BN_name = str_replace_all(BN_name, "\\;\\|", "; ")) %>%
+  cSplit(.,"BN_name",sep = "|",direction = "long") %>%
+  filter(BN_name!="")
+pbl_viaf3 <- sheets_read(ss = "1L-7Zv9EyLr5FeCIY_s90rT5Hz6DjAScCx6NxfuHvoEQ") %>%
+  filter(czy_ten_sam!="nie") %>%
+  select(pbl_id, BN_id, BN_name) %>%
+  mutate(BN_name = str_replace_all(BN_name,"\\|\\(", " ("),
+         BN_name = str_replace_all(BN_name, "\\;\\|", "; ")) %>%
+  cSplit(.,"BN_name",sep = "|",direction = "long") %>%
+  filter(BN_name!="")
+pbl_viaf <- rbind(pbl_viaf,pbl_viaf2, pbl_viaf3) %>%
+  arrange(pbl_id) %>%
+  unique()
+remove(pbl_viaf2)
+remove(pbl_viaf3)
+
+#pobranie starych list książek z importu
+#aktualizacja - uzupełnij ostatni brakujący zaimportowany rocznik
+listy_2011 <- sheets_read(ss = "1s22ClRxlrPHaAXi_n_JJH3mX6vKYzKjsKbpJpQztx_8", sheet = "lista_ksiazek")
+listy_2010 <- sheets_read(ss = "1Vjeg0JsYI-8v9B-x_yyujIhmw7UR7Lk7poexrHNdVzM", sheet = "lista_ksiazek")
+listy_2009 <- sheets_read(ss = "1Gc4gQSm9b4NDTQysiauzW9Jac6yP0oNuFbB8utO4kS4", sheet = "lista_ksiazek")
+listy_2005 <- sheets_read(ss = "1HkWkX61sQWktSXf0v0uPV8j2DwuTocesyCJuKTdisIU", sheet = "lista_ksiazek")
+listy_2006 <- sheets_read(ss = "1zeMx_Idsum8JmlM6G7Eufx9LxloHoAHv8V-My71VZf4", sheet = "lista_ksiazek")
+listy_2007 <- sheets_read(ss = "19iL7YoD8ug-rLnpzS6FD46aS2J1BRf4qL5VxllywCGE", sheet = "lista_ksiazek")
+listy_2008 <- sheets_read(ss = "1RshTeWdXBE7OzOEfoGpL9Ljb_GXDlGDePNjV1HKmuOo", sheet = "lista_ksiazek")
+listy_2004 <- sheets_read(ss = "1RmDia97s4B8F74sS7Wbpnv_A9zMfr4xTvcD9leukAfM", sheet = "lista_książek") %>%
+  mutate(typ_ksiazki = NA, link = NA, link_1 = NA, status = NA, blad_w_imporcie_tytulu = NA) %>%
+  select(pracownik,ZA_ZAPIS_ID,typ_ksiazki, link, link_1, rok, status, blad_w_imporcie_tytulu, X100, X245, X650, X655, X246, X250, X260, X300, X380, X490, X500, X501, X546, X600, X700, X041, X080)
+#ujednolicenie 2004 do wzoru późniejszych rocznikóW
+do2004 <- RJDBC::dbGetQuery(PBL,
+                            "select z.za_zapis_id, z.za_status_imp
+                            from pbl_zapisy z
+                            where z.za_uwagi like '%import%02%'")
+listy_2004 <- merge(listy_2004,do2004,by = "ZA_ZAPIS_ID",all.x = TRUE) %>%
+  mutate(status = ZA_STATUS_IMP) %>%
+  select(-ZA_STATUS_IMP) %>%
+  select(pracownik,ZA_ZAPIS_ID,typ_ksiazki, link, link_1, rok, status, blad_w_imporcie_tytulu, X100, X245, X650, X655, X246, X250, X260, X300, X380, X490, X500, X501, X546, X600, X700, X041, X080)
+#zapewnienie tych samych nazw kolumn
+#aktualizacja - wprowadź wiersz dla ostatniego zaimportowanego rocznika
+colnames(listy_2011) <- names(listy_2004)
+colnames(listy_2010) <- names(listy_2004)
+colnames(listy_2009) <- names(listy_2004)
+colnames(listy_2005) <- names(listy_2004)
+colnames(listy_2006) <- names(listy_2004)
+colnames(listy_2007) <- names(listy_2004)
+colnames(listy_2008) <- names(listy_2004)
+listy_2004 <- listy_2004 %>%
+  mutate(X655 = str_remove(str_replace_all(X655,"(\\$a)","|\\1"),"^\\|"),
+         X650 = str_remove(str_replace_all(X650,"(\\$a)","|\\1"),"^\\|"))
+
+#wczytanie kartotek PBL
+redaktorzy_dzialow <- sheets_read(ss = "1Baje-ZfPgAKEDAoDzeo_eCBDrsL7jAXt6ubP2cedbFc", sheet = "redaktorzy_działów") %>%
+  select(DZ_DZIAL_ID, DZ_NAZWA, redaktor_dzialu) #%>%
+  #mutate(DZ_DZIAL_ID = as.character(DZ_DZIAL_ID))
+
+PBL_dzialy <- dbReadTable(PBL,'PBL_DZIALY') %>%
+  select(1,3,6)
+
+PBL_dzialy_path <- merge(x = PBL_dzialy, y = PBL_dzialy, by.x = "DZ_DZ_DZIAL_ID", by.y = "DZ_DZIAL_ID", all.x = TRUE)
+colnames(PBL_dzialy_path) <- c("NAD_DZ_DZIAL_ID", "DZ_DZIAL_ID", "DZ_NAZWA", "NAD_DZ_NAZWA", "NAD_NAD_DZ_DZIAL_ID")
+
+PBL_dzialy_path <- merge(x = PBL_dzialy_path, y = PBL_dzialy, by.x = "NAD_NAD_DZ_DZIAL_ID", by.y = "DZ_DZIAL_ID", all.x = TRUE)
+colnames(PBL_dzialy_path) <- c("NAD_NAD_DZ_DZIAL_ID", "NAD_DZ_DZIAL_ID", "DZ_DZIAL_ID", "DZ_NAZWA", "NAD_DZ_NAZWA", "NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_DZ_DZIAL_ID")
+
+PBL_dzialy_path <- merge(x = PBL_dzialy_path, y = PBL_dzialy, by.x = "NAD_NAD_NAD_DZ_DZIAL_ID", by.y = "DZ_DZIAL_ID", all.x = TRUE)
+colnames(PBL_dzialy_path) <- c("NAD_NAD_NAD_DZ_DZIAL_ID", "NAD_NAD_DZ_DZIAL_ID", "NAD_DZ_DZIAL_ID", "DZ_DZIAL_ID", "DZ_NAZWA", "NAD_DZ_NAZWA", "NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_NAD_DZ_DZIAL_ID")
+
+PBL_dzialy_path <- merge(x = PBL_dzialy_path, y = PBL_dzialy, by.x = "NAD_NAD_NAD_NAD_DZ_DZIAL_ID", by.y = "DZ_DZIAL_ID", all.x = TRUE)
+colnames(PBL_dzialy_path) <- c("NAD_NAD_NAD_NAD_DZ_DZIAL_ID", "NAD_NAD_NAD_DZ_DZIAL_ID", "NAD_NAD_DZ_DZIAL_ID", "NAD_DZ_DZIAL_ID", "DZ_DZIAL_ID", "DZ_NAZWA", "NAD_DZ_NAZWA", "NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_NAD_NAD_DZ_DZIAL_ID")
+
+PBL_dzialy_path <- merge(x = PBL_dzialy_path, y = PBL_dzialy, by.x = "NAD_NAD_NAD_NAD_NAD_DZ_DZIAL_ID", by.y = "DZ_DZIAL_ID", all.x = TRUE)
+colnames(PBL_dzialy_path) <- c("NAD_NAD_NAD_NAD_NAD_DZ_DZIAL_ID", "NAD_NAD_NAD_NAD_DZ_DZIAL_ID", "NAD_NAD_NAD_DZ_DZIAL_ID", "NAD_NAD_DZ_DZIAL_ID", "NAD_DZ_DZIAL_ID", "DZ_DZIAL_ID", "DZ_NAZWA", "NAD_DZ_NAZWA", "NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_NAD_NAD_NAD_DZ_DZIAL_ID")
+
+PBL_dzialy_path <- PBL_dzialy_path %>%
+  select(-length(PBL_dzialy_path)) %>%
+  filter(DZ_DZIAL_ID!=0) %>%
+  select(6,7,5,8,4,9,3,10,2,11,1,12) %>%
+  unique()
+
+PBL_dz_osob <- PBL_dzialy_path %>%
+  filter(grepl("osobowe", DZ_NAZWA)|grepl("osobowe", NAD_DZ_NAZWA)|grepl("osobowe", NAD_NAD_DZ_NAZWA)|grepl("osobowe", NAD_NAD_NAD_DZ_NAZWA)|grepl("osobowe", NAD_NAD_NAD_NAD_DZ_NAZWA)|grepl("osobowe", NAD_NAD_NAD_NAD_NAD_DZ_NAZWA)) %>%
+  select(1,2,3,4,5,6,7,8) %>%
+  filter(DZ_DZIAL_ID!=148)
+
+PBL_dz_osob_1 <- PBL_dz_osob %>%
+  select(1,2,3,4)
+PBL_dz_osob_2 <- PBL_dz_osob %>%
+  select(1,2,5,6)
+PBL_dz_osob_3 <- PBL_dz_osob %>%
+  select(1,2,7,8)
+colnames(PBL_dz_osob_2) <- c(names(PBL_dz_osob_1))
+colnames(PBL_dz_osob_3) <- c(names(PBL_dz_osob_1))
+PBL_dz_osob <- rbind(PBL_dz_osob_1,PBL_dz_osob_2,PBL_dz_osob_3) %>%
+  filter(!is.na(NAD_DZ_DZIAL_ID)) %>%
+  unique()
+PBL_dz_osob <- rbind(PBL_dz_osob, c("15043", "Hasła osobowe(luksemburska)","15043", "Hasła osobowe(luksemburska)"), c("430", "Hasła osobowe (Ludzie teatru i filmu)","430", "Hasła osobowe (Ludzie teatru i filmu)"))
+PBL_dz_osob_bez_teatru <- PBL_dz_osob %>%
+  filter(DZ_DZIAL_ID!=430)
+
+PBL_tworcy <- dbReadTable(PBL,'PBL_TWORCY')
+tw_i_dz_podm <- merge(x=PBL_tworcy,y=PBL_dz_osob_bez_teatru, by.x = "TW_DZ_DZIAL_ID", by.y = "NAD_DZ_DZIAL_ID", all.x = TRUE) %>%
+  arrange(TW_TWORCA_ID)
+
+tw_i_dz_podm <- data.frame(tw_i_dz_podm, pol_osob = ifelse(tw_i_dz_podm$TW_DZ_DZIAL_ID == 148 & substr(tw_i_dz_podm$TW_NAZWISKO,1,1)==str_sub(tw_i_dz_podm$DZ_NAZWA,nchar(as.character(tw_i_dz_podm$DZ_NAZWA)),nchar(as.character(tw_i_dz_podm$DZ_NAZWA))),TRUE,FALSE), pol = ifelse(tw_i_dz_podm$TW_DZ_DZIAL_ID == 148, TRUE, FALSE)) %>%
+  filter(pol_osob == TRUE | pol == FALSE)
+PBL_tworcy_podm <- tw_i_dz_podm %>%
+  select(TW_TWORCA_ID, TW_NAZWISKO, TW_IMIE, DZ_DZIAL_ID, DZ_NAZWA, TW_NAZW_WLASCIWE, TW_PSEUDONIMY, TW_DATA_URODZIN, TW_DATA_ZGONU, TW_ROCZNIKI_PBL, TW_SLOWA_KLUCZOWE, TW_UWAGI, TW_ROK_URODZIN, TW_ROK_ZGONU, TW_LICZBA_ZAPISOW, TW_ADNOTACJE, TW_TRANSLITERACJE) %>%
+  filter(!is.na(DZ_DZIAL_ID))
+colnames(PBL_tworcy_podm) <- c("TW_TWORCA_ID", "TW_NAZWISKO", "TW_IMIE", "TW_DZ_DZIAL_ID", "DZ_NAZWA", "TW_NAZW_WLASCIWE", "TW_PSEUDONIMY", "TW_DATA_URODZIN", "TW_DATA_ZGONU", "TW_ROCZNIKI_PBL", "TW_SLOWA_KLUCZOWE", "TW_UWAGI", "TW_ROK_URODZIN", "TW_ROK_ZGONU", "TW_LICZBA_ZAPISOW", "TW_ADNOTACJE", "TW_TRANSLITERACJE")
+PBL_tworcy_podm <- PBL_tworcy_podm %>%
+  mutate(nazwa = ifelse(is.na(TW_IMIE),as.character(TW_NAZWISKO),paste(TW_NAZWISKO,TW_IMIE, sep = "")),
+         nazwa = str_to_lower(str_replace_all(nazwa, "\\W", "")),
+         nazwa = str_replace_all(str_to_lower(nazwa), "\\W", ""))
+
+tw_i_dz <- merge(x=PBL_tworcy,y=PBL_dz_osob, by.x = "TW_DZ_DZIAL_ID", by.y = "NAD_DZ_DZIAL_ID", all.x = TRUE) %>%
+  arrange(TW_TWORCA_ID)
+tw_i_dz <- data.frame(tw_i_dz, pol_osob = ifelse(tw_i_dz$TW_DZ_DZIAL_ID == 148 & substr(tw_i_dz$TW_NAZWISKO,1,1)==str_sub(tw_i_dz$DZ_NAZWA,nchar(as.character(tw_i_dz$DZ_NAZWA)),nchar(as.character(tw_i_dz$DZ_NAZWA))),TRUE,FALSE), pol = ifelse(tw_i_dz$TW_DZ_DZIAL_ID == 148, TRUE, FALSE)) %>%
+  filter(pol_osob == TRUE | pol == FALSE)
+PBL_tworcy <- tw_i_dz %>%
+  select(TW_TWORCA_ID, TW_NAZWISKO, TW_IMIE, DZ_DZIAL_ID, DZ_NAZWA, TW_NAZW_WLASCIWE, TW_PSEUDONIMY, TW_DATA_URODZIN, TW_DATA_ZGONU, TW_ROCZNIKI_PBL, TW_SLOWA_KLUCZOWE, TW_UWAGI, TW_ROK_URODZIN, TW_ROK_ZGONU, TW_LICZBA_ZAPISOW, TW_ADNOTACJE, TW_TRANSLITERACJE)
+colnames(PBL_tworcy) <- c("TW_TWORCA_ID", "TW_NAZWISKO", "TW_IMIE", "TW_DZ_DZIAL_ID", "DZ_NAZWA", "TW_NAZW_WLASCIWE", "TW_PSEUDONIMY", "TW_DATA_URODZIN", "TW_DATA_ZGONU", "TW_ROCZNIKI_PBL", "TW_SLOWA_KLUCZOWE", "TW_UWAGI", "TW_ROK_URODZIN", "TW_ROK_ZGONU", "TW_LICZBA_ZAPISOW", "TW_ADNOTACJE", "TW_TRANSLITERACJE")
+PBL_tworcy <- PBL_tworcy %>%
+  mutate(nazwa = ifelse(is.na(TW_IMIE),as.character(TW_NAZWISKO),paste(TW_NAZWISKO,TW_IMIE, sep = "")),
+         nazwa = str_to_lower(str_replace_all(nazwa, "\\W", "")),
+         nazwa = str_replace_all(str_to_lower(nazwa), "\\W", ""),
+         TW_DZ_DZIAL_ID = as.numeric(TW_DZ_DZIAL_ID))
+
+PBL_autorzy <- dbReadTable(PBL,'PBL_AUTORZY') %>%
+  mutate(nazwa = ifelse(is.na(AM_IMIE),as.character(AM_NAZWISKO),paste(AM_NAZWISKO,AM_IMIE, sep = "")),
+         nazwa = str_to_lower(str_replace_all(nazwa, "\\W", "")),
+         nazwa = str_replace_all(str_to_lower(nazwa), "\\W", "")) %>%
+  filter(nazwa != "nana")
+
+PBL_wspoltworcy <- dbReadTable(PBL,'PBL_OSOBY') %>%
+  mutate(nazwa_prosta = str_replace_all(str_to_lower(ifelse(is.na(OS_IMIE),as.character(OS_NAZWISKO),paste(OS_NAZWISKO,OS_IMIE, sep = ""))), "\\W", "")) %>%
+  filter(nazwa_prosta !="nana")
+
+PBL_funkcje <- sheets_read(ss = "1htn_L6REs3GdG1xSiGHIfr6MJvjmmU_kVGxiMZtCV24", sheet = "Arkusz1")
+
+PBL_wydawnictwa <- dbReadTable(PBL,'PBL_WYDAWNICTWA') %>%
+  mutate(nazwa_prosta = str_replace_all(str_to_lower(paste(WY_MIASTO, WY_NAZWA)), "\\W", "")) %>%
+  filter(nazwa_prosta !="nana")
+
+PBL_rodzaje_zapisow <- dbReadTable(PBL,'PBL_RODZAJE_ZAPISOW')
+
+BN_PBL_lista_literatur <- sheets_read(ss = "1zbwjnrtWGvbjrQTLMavJcWSu7HfP0I-USNgZ_KWiXjc", sheet = "lista ukd bn") %>%
+  filter(!is.na(ukd_ogolne)) %>%
+  select(3:9) %>%
+  cSplit(.,c("pbl_id","pbl_nazwa","redaktor_dzialu","pbl_id_literatury","pbl_literatura"),sep = "|",direction = "long") %>%
+  filter(!is.na(pbl_id))
+
+PBL_hasla_osobowe <- sheets_read(ss = "1zbwjnrtWGvbjrQTLMavJcWSu7HfP0I-USNgZ_KWiXjc", sheet = "pbl_hasla_osobowe") %>%
+  select(2:5)
+colnames(PBL_hasla_osobowe) <- c("DZ_DZIAL_ID","DZ_NAZWA","redaktor_dzialu","nazwa")
+
+
+```
+
+```{r roczniki} 
+roczniki <- 2013:2019
+
+for (import_year in roczniki) {
 
 #wgranie zbiorów książek
 bn_ks <- read.csv2(paste("C:/Users/",employee_name,"/Downloads/bn_ks_",import_year,".csv",sep = ""), encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
@@ -33,6 +208,10 @@ bn_ks <- read.csv2(paste("C:/Users/",employee_name,"/Downloads/bn_ks_",import_ye
   mutate(X245 = str_replace_all(X245," \\/ \\$c"," /$c"),
          BN_URL = paste("https://katalogi.bn.org.pl/discovery/fulldisplay?docid=alma",as.character(X009),"&context=L&vid=48OMNIS_NLOP:48OMNIS_NLOP&lang=pl",sep = ""),
          BN_URL = str_replace(BN_URL,"88&","66&"))
+if (import_year == 2018) {
+bn_ks <- bn_ks %>% 
+  select(-2,-3,-4,-5,-6)
+}
 
 ### przenieść kolejnych autorów z 700 do pola 100
 marc_field_700 <- bn_ks %>%
@@ -83,12 +262,15 @@ drugi_autor <- bn_ks %>%
   
 x <- 1:length(drugi_autor$id)
 for (i in x) {
+  tryCatch({
   progress(match(i,x), max.value = length(x))
   y <- 1:lengths(drugi_autor$drugi_autor[i])
   for (j in y) {
     drugi_autor$X700[i] <- ifelse(is.na(drugi_autor$drugi_autor[i]),as.character(drugi_autor$X700[i]),
                            ifelse(grepl(str_replace_all(str_replace_all(str_replace_all(str_replace_all(drugi_autor$drugi_autor[i][[1]][j],"\\\\","\\\\\\\\"),"\\$","\\\\$"),"\\(","\\\\("),"\\)","\\\\)"),drugi_autor$X700[i]),str_remove(drugi_autor$X700[i],str_replace_all(str_replace_all(str_replace_all(str_replace_all(drugi_autor$drugi_autor[i][[1]][j],"\\\\","\\\\\\\\"),"\\$","\\\\$"),"\\(","\\\\("),"\\)","\\\\)")),as.character(drugi_autor$X700[i])))
   }
+  }, error=function(e) {
+  })
 }
 
 drugi_autor <- drugi_autor %>%
@@ -100,54 +282,8 @@ bn_ks <- bn_ks %>%
   mutate(X100 = drugi_autor$X100,
          X700 = drugi_autor$X700)
 ##koniec przenosin
-chunk1 <- bn_ks
-```
 
-```{r generowanie listy zapisow z osobami PBL}
-bn_ks <- chunk1
-#wczytanie listy utożsamionych twórców z autorami BN
-#bezpiecznik: użyć sheets_auth() z konsoli
-pbl_viaf <- sheets_read(ss = "1cEz73dGN2r2-TTc702yne9tKfH9PQ6UyAJ2zBSV6Jb0") %>%
-  filter(czy_ten_sam!="nie") %>%
-  select(pbl_id, BN_id, BN_name) %>%
-  mutate(BN_name = str_replace_all(BN_name,"\\|\\(", " ("),
-         BN_name = str_replace_all(BN_name, "\\;\\|", "; ")) %>%
-  cSplit(.,"BN_name",sep = "|",direction = "long") %>%
-  filter(BN_name!="")
-pbl_viaf2 <- sheets_read(ss = "1_Bhwzo0xu4yTn8tF0ZNAZq9iIAqIxfcrjeLVCm_mggM") %>%
-  filter(czy_ten_sam!="nie") %>%
-  select(pbl_id, BN_id, BN_name) %>%
-  mutate(BN_name = str_replace_all(BN_name,"\\|\\(", " ("),
-         BN_name = str_replace_all(BN_name, "\\;\\|", "; ")) %>%
-  cSplit(.,"BN_name",sep = "|",direction = "long") %>%
-  filter(BN_name!="")
-pbl_viaf3 <- sheets_read(ss = "1L-7Zv9EyLr5FeCIY_s90rT5Hz6DjAScCx6NxfuHvoEQ") %>%
-  filter(czy_ten_sam!="nie") %>%
-  select(pbl_id, BN_id, BN_name) %>%
-  mutate(BN_name = str_replace_all(BN_name,"\\|\\(", " ("),
-         BN_name = str_replace_all(BN_name, "\\;\\|", "; ")) %>%
-  cSplit(.,"BN_name",sep = "|",direction = "long") %>%
-  filter(BN_name!="")
-pbl_viaf <- rbind(pbl_viaf,pbl_viaf2, pbl_viaf3) %>%
-  arrange(pbl_id) %>%
-  unique()
-remove(pbl_viaf2)
-remove(pbl_viaf3)
 
-#bezpiecznik!
-#sprawdź, czy jedno hasło bn nie zasila kilku haseł twórców pbl
-
-#bezpiecznik!
-#w obiekcie pbl_viaf_test_1 przy frekwencji większej niż 1 należy przeanalizować grupy, jeśli do tego samego identyfikatora pbl przypisane sa różne identyfikatory bn, które jednak opisują tę samą osobę, to wszystko jest okej; w przeciwnym razie trzeba przeprowadzić korektę w plikach "mapowanie_osob_bn_pbl"
-
-# count2 <- as.data.frame(table(pbl_viaf_test$pbl_id))
-# pbl_viaf_test_2 <- merge(pbl_viaf_test,count2,by.x = "pbl_id",by.y = "Var1",all.x = TRUE) %>%
-#  unique()
-
-#bezpiecznik!
-#dla grupy o frekwencji większej niż 1 sprawdź, czy w zestawie identyfikatorów bn nie ma rażących błędów; w przeciwnym razie trzeba przeprowadzić korektę w plikach "mapowanie_osob_bn_pbl"
-
-#utożsamianie po nazewnictwie z informacją o dziale
 tworca_i_dzial <- dbGetQuery(PBL,
                              "select tw.tw_tworca_id \"pbl_id\", dz.dz_dzial_id||'|'||dz.dz_nazwa \"osoba_pbl_dzial_id_name\"
                               from pbl_tworcy tw
@@ -269,9 +405,7 @@ bn_ks <- bn_ks %>%
 bezpiecznik <- bn_ks %>% 
   filter(osoba_bn_autor=="NA")
 chunk2 <- bn_ks
-```
 
-```{r dalsze przygotowanie zbioru do importu - UKD, słowa kluczowe, poloniki}
 #wskazanie interesujących PBL dziedzin wiedzy po UKD i określenie typu UKD
 bn_ks <- chunk2 %>%
   mutate(dziedzina_PBL = ifelse(str_detect(X080,"(?<=\\$a|:|\\[|\\+|\\()(82)"),"ukd_lit",
@@ -558,43 +692,8 @@ bn_ok <- sqldf("select *
                where a.id not in (select b.id from ks_glottodydaktyka b)")
 
 chunk3 <- bn_ok
-```
 
-```{r automatyczne usunięcie INO na podstawie wcześniejszych importów}
 bn_ok <- chunk3
-#pobranie starych list książek z importu
-#aktualizacja - uzupełnij ostatni brakujący zaimportowany rocznik
-listy_2011 <- sheets_read(ss = "1s22ClRxlrPHaAXi_n_JJH3mX6vKYzKjsKbpJpQztx_8", sheet = "lista_ksiazek")
-listy_2010 <- sheets_read(ss = "1Vjeg0JsYI-8v9B-x_yyujIhmw7UR7Lk7poexrHNdVzM", sheet = "lista_ksiazek")
-listy_2009 <- sheets_read(ss = "1Gc4gQSm9b4NDTQysiauzW9Jac6yP0oNuFbB8utO4kS4", sheet = "lista_ksiazek")
-listy_2005 <- sheets_read(ss = "1HkWkX61sQWktSXf0v0uPV8j2DwuTocesyCJuKTdisIU", sheet = "lista_ksiazek")
-listy_2006 <- sheets_read(ss = "1zeMx_Idsum8JmlM6G7Eufx9LxloHoAHv8V-My71VZf4", sheet = "lista_ksiazek")
-listy_2007 <- sheets_read(ss = "19iL7YoD8ug-rLnpzS6FD46aS2J1BRf4qL5VxllywCGE", sheet = "lista_ksiazek")
-listy_2008 <- sheets_read(ss = "1RshTeWdXBE7OzOEfoGpL9Ljb_GXDlGDePNjV1HKmuOo", sheet = "lista_ksiazek")
-listy_2004 <- sheets_read(ss = "1RmDia97s4B8F74sS7Wbpnv_A9zMfr4xTvcD9leukAfM", sheet = "lista_książek") %>%
-  mutate(typ_ksiazki = NA, link = NA, link_1 = NA, status = NA, blad_w_imporcie_tytulu = NA) %>%
-  select(pracownik,ZA_ZAPIS_ID,typ_ksiazki, link, link_1, rok, status, blad_w_imporcie_tytulu, X100, X245, X650, X655, X246, X250, X260, X300, X380, X490, X500, X501, X546, X600, X700, X041, X080)
-#ujednolicenie 2004 do wzoru późniejszych rocznikóW
-do2004 <- RJDBC::dbGetQuery(PBL,
-                            "select z.za_zapis_id, z.za_status_imp
-                            from pbl_zapisy z
-                            where z.za_uwagi like '%import%02%'")
-listy_2004 <- merge(listy_2004,do2004,by = "ZA_ZAPIS_ID",all.x = TRUE) %>%
-  mutate(status = ZA_STATUS_IMP) %>%
-  select(-ZA_STATUS_IMP) %>%
-  select(pracownik,ZA_ZAPIS_ID,typ_ksiazki, link, link_1, rok, status, blad_w_imporcie_tytulu, X100, X245, X650, X655, X246, X250, X260, X300, X380, X490, X500, X501, X546, X600, X700, X041, X080)
-#zapewnienie tych samych nazw kolumn
-#aktualizacja - wprowadź wiersz dla ostatniego zaimportowanego rocznika
-colnames(listy_2011) <- names(listy_2004)
-colnames(listy_2010) <- names(listy_2004)
-colnames(listy_2009) <- names(listy_2004)
-colnames(listy_2005) <- names(listy_2004)
-colnames(listy_2006) <- names(listy_2004)
-colnames(listy_2007) <- names(listy_2004)
-colnames(listy_2008) <- names(listy_2004)
-listy_2004 <- listy_2004 %>%
-  mutate(X655 = str_remove(str_replace_all(X655,"(\\$a)","|\\1"),"^\\|"),
-         X650 = str_remove(str_replace_all(X650,"(\\$a)","|\\1"),"^\\|"))
 
 #wyznaczenie listy 650 i 655 do automatycznego INO na podstawie wcześniejszych importów - usunięte są tylko te deskryptory, które nie mają związku z literaturą podmiotową
 zapisy <- RJDBC::dbGetQuery(PBL,
@@ -701,9 +800,7 @@ reszta <- sqldf("select *
                (select b.id
                from bn_ok b)")
 chunk4 <- bn_ok
-```
 
-```{r przypisanie książce rodzaju (podmiotowa, przedmiotowa, antologie, współwydanie)}
 bn_ok <- chunk4
 stare_rodzajowanie <- bn_ok %>%
   mutate(czy_ma_ukd = ifelse(X080=="","nie","tak"),
@@ -846,116 +943,7 @@ bn_ok <- bn_ok %>%
          rodzaj_ksiazki = ifelse(X080=="\\\\$a82-1/-9(0.054)"&rodzaj_ksiazki=="przedmiotowa"&!grepl("xhistoria|xtematyka|xbiografia",X650)&!grepl("xhistoria|xtematyka|xbiografia",X655),"podmiotowa",as.character(rodzaj_ksiazki)),
          rodzaj_ksiazki = ifelse(rodzaj_ksiazki=="podmiotowa"&grepl("aut\\.",X245)&grepl("et al\\.",X245),"antologia",as.character(rodzaj_ksiazki)))
 chunk5 <- bn_ok
-```
 
-```{r wczytanie danych PBL}
-#wczytanie kartotek PBL
-redaktorzy_dzialow <- sheets_read(ss = "1Baje-ZfPgAKEDAoDzeo_eCBDrsL7jAXt6ubP2cedbFc", sheet = "redaktorzy_działów") %>%
-  select(DZ_DZIAL_ID, DZ_NAZWA, redaktor_dzialu) #%>%
-  #mutate(DZ_DZIAL_ID = as.character(DZ_DZIAL_ID))
-
-PBL_dzialy <- dbReadTable(PBL,'PBL_DZIALY') %>%
-  select(1,3,6)
-
-PBL_dzialy_path <- merge(x = PBL_dzialy, y = PBL_dzialy, by.x = "DZ_DZ_DZIAL_ID", by.y = "DZ_DZIAL_ID", all.x = TRUE)
-colnames(PBL_dzialy_path) <- c("NAD_DZ_DZIAL_ID", "DZ_DZIAL_ID", "DZ_NAZWA", "NAD_DZ_NAZWA", "NAD_NAD_DZ_DZIAL_ID")
-
-PBL_dzialy_path <- merge(x = PBL_dzialy_path, y = PBL_dzialy, by.x = "NAD_NAD_DZ_DZIAL_ID", by.y = "DZ_DZIAL_ID", all.x = TRUE)
-colnames(PBL_dzialy_path) <- c("NAD_NAD_DZ_DZIAL_ID", "NAD_DZ_DZIAL_ID", "DZ_DZIAL_ID", "DZ_NAZWA", "NAD_DZ_NAZWA", "NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_DZ_DZIAL_ID")
-
-PBL_dzialy_path <- merge(x = PBL_dzialy_path, y = PBL_dzialy, by.x = "NAD_NAD_NAD_DZ_DZIAL_ID", by.y = "DZ_DZIAL_ID", all.x = TRUE)
-colnames(PBL_dzialy_path) <- c("NAD_NAD_NAD_DZ_DZIAL_ID", "NAD_NAD_DZ_DZIAL_ID", "NAD_DZ_DZIAL_ID", "DZ_DZIAL_ID", "DZ_NAZWA", "NAD_DZ_NAZWA", "NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_NAD_DZ_DZIAL_ID")
-
-PBL_dzialy_path <- merge(x = PBL_dzialy_path, y = PBL_dzialy, by.x = "NAD_NAD_NAD_NAD_DZ_DZIAL_ID", by.y = "DZ_DZIAL_ID", all.x = TRUE)
-colnames(PBL_dzialy_path) <- c("NAD_NAD_NAD_NAD_DZ_DZIAL_ID", "NAD_NAD_NAD_DZ_DZIAL_ID", "NAD_NAD_DZ_DZIAL_ID", "NAD_DZ_DZIAL_ID", "DZ_DZIAL_ID", "DZ_NAZWA", "NAD_DZ_NAZWA", "NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_NAD_NAD_DZ_DZIAL_ID")
-
-PBL_dzialy_path <- merge(x = PBL_dzialy_path, y = PBL_dzialy, by.x = "NAD_NAD_NAD_NAD_NAD_DZ_DZIAL_ID", by.y = "DZ_DZIAL_ID", all.x = TRUE)
-colnames(PBL_dzialy_path) <- c("NAD_NAD_NAD_NAD_NAD_DZ_DZIAL_ID", "NAD_NAD_NAD_NAD_DZ_DZIAL_ID", "NAD_NAD_NAD_DZ_DZIAL_ID", "NAD_NAD_DZ_DZIAL_ID", "NAD_DZ_DZIAL_ID", "DZ_DZIAL_ID", "DZ_NAZWA", "NAD_DZ_NAZWA", "NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_NAD_NAD_DZ_NAZWA", "NAD_NAD_NAD_NAD_NAD_NAD_DZ_DZIAL_ID")
-
-PBL_dzialy_path <- PBL_dzialy_path %>%
-  select(-length(PBL_dzialy_path)) %>%
-  filter(DZ_DZIAL_ID!=0) %>%
-  select(6,7,5,8,4,9,3,10,2,11,1,12) %>%
-  unique()
-
-PBL_dz_osob <- PBL_dzialy_path %>%
-  filter(grepl("osobowe", DZ_NAZWA)|grepl("osobowe", NAD_DZ_NAZWA)|grepl("osobowe", NAD_NAD_DZ_NAZWA)|grepl("osobowe", NAD_NAD_NAD_DZ_NAZWA)|grepl("osobowe", NAD_NAD_NAD_NAD_DZ_NAZWA)|grepl("osobowe", NAD_NAD_NAD_NAD_NAD_DZ_NAZWA)) %>%
-  select(1,2,3,4,5,6,7,8) %>%
-  filter(DZ_DZIAL_ID!=148)
-
-PBL_dz_osob_1 <- PBL_dz_osob %>%
-  select(1,2,3,4)
-PBL_dz_osob_2 <- PBL_dz_osob %>%
-  select(1,2,5,6)
-PBL_dz_osob_3 <- PBL_dz_osob %>%
-  select(1,2,7,8)
-colnames(PBL_dz_osob_2) <- c(names(PBL_dz_osob_1))
-colnames(PBL_dz_osob_3) <- c(names(PBL_dz_osob_1))
-PBL_dz_osob <- rbind(PBL_dz_osob_1,PBL_dz_osob_2,PBL_dz_osob_3) %>%
-  filter(!is.na(NAD_DZ_DZIAL_ID)) %>%
-  unique()
-PBL_dz_osob <- rbind(PBL_dz_osob, c("15043", "Hasła osobowe(luksemburska)","15043", "Hasła osobowe(luksemburska)"), c("430", "Hasła osobowe (Ludzie teatru i filmu)","430", "Hasła osobowe (Ludzie teatru i filmu)"))
-PBL_dz_osob_bez_teatru <- PBL_dz_osob %>%
-  filter(DZ_DZIAL_ID!=430)
-
-PBL_tworcy <- dbReadTable(PBL,'PBL_TWORCY')
-tw_i_dz_podm <- merge(x=PBL_tworcy,y=PBL_dz_osob_bez_teatru, by.x = "TW_DZ_DZIAL_ID", by.y = "NAD_DZ_DZIAL_ID", all.x = TRUE) %>%
-  arrange(TW_TWORCA_ID)
-
-tw_i_dz_podm <- data.frame(tw_i_dz_podm, pol_osob = ifelse(tw_i_dz_podm$TW_DZ_DZIAL_ID == 148 & substr(tw_i_dz_podm$TW_NAZWISKO,1,1)==str_sub(tw_i_dz_podm$DZ_NAZWA,nchar(as.character(tw_i_dz_podm$DZ_NAZWA)),nchar(as.character(tw_i_dz_podm$DZ_NAZWA))),TRUE,FALSE), pol = ifelse(tw_i_dz_podm$TW_DZ_DZIAL_ID == 148, TRUE, FALSE)) %>%
-  filter(pol_osob == TRUE | pol == FALSE)
-PBL_tworcy_podm <- tw_i_dz_podm %>%
-  select(TW_TWORCA_ID, TW_NAZWISKO, TW_IMIE, DZ_DZIAL_ID, DZ_NAZWA, TW_NAZW_WLASCIWE, TW_PSEUDONIMY, TW_DATA_URODZIN, TW_DATA_ZGONU, TW_ROCZNIKI_PBL, TW_SLOWA_KLUCZOWE, TW_UWAGI, TW_ROK_URODZIN, TW_ROK_ZGONU, TW_LICZBA_ZAPISOW, TW_ADNOTACJE, TW_TRANSLITERACJE) %>%
-  filter(!is.na(DZ_DZIAL_ID))
-colnames(PBL_tworcy_podm) <- c("TW_TWORCA_ID", "TW_NAZWISKO", "TW_IMIE", "TW_DZ_DZIAL_ID", "DZ_NAZWA", "TW_NAZW_WLASCIWE", "TW_PSEUDONIMY", "TW_DATA_URODZIN", "TW_DATA_ZGONU", "TW_ROCZNIKI_PBL", "TW_SLOWA_KLUCZOWE", "TW_UWAGI", "TW_ROK_URODZIN", "TW_ROK_ZGONU", "TW_LICZBA_ZAPISOW", "TW_ADNOTACJE", "TW_TRANSLITERACJE")
-PBL_tworcy_podm <- PBL_tworcy_podm %>%
-  mutate(nazwa = ifelse(is.na(TW_IMIE),as.character(TW_NAZWISKO),paste(TW_NAZWISKO,TW_IMIE, sep = "")),
-         nazwa = str_to_lower(str_replace_all(nazwa, "\\W", "")),
-         nazwa = str_replace_all(str_to_lower(nazwa), "\\W", ""))
-
-tw_i_dz <- merge(x=PBL_tworcy,y=PBL_dz_osob, by.x = "TW_DZ_DZIAL_ID", by.y = "NAD_DZ_DZIAL_ID", all.x = TRUE) %>%
-  arrange(TW_TWORCA_ID)
-tw_i_dz <- data.frame(tw_i_dz, pol_osob = ifelse(tw_i_dz$TW_DZ_DZIAL_ID == 148 & substr(tw_i_dz$TW_NAZWISKO,1,1)==str_sub(tw_i_dz$DZ_NAZWA,nchar(as.character(tw_i_dz$DZ_NAZWA)),nchar(as.character(tw_i_dz$DZ_NAZWA))),TRUE,FALSE), pol = ifelse(tw_i_dz$TW_DZ_DZIAL_ID == 148, TRUE, FALSE)) %>%
-  filter(pol_osob == TRUE | pol == FALSE)
-PBL_tworcy <- tw_i_dz %>%
-  select(TW_TWORCA_ID, TW_NAZWISKO, TW_IMIE, DZ_DZIAL_ID, DZ_NAZWA, TW_NAZW_WLASCIWE, TW_PSEUDONIMY, TW_DATA_URODZIN, TW_DATA_ZGONU, TW_ROCZNIKI_PBL, TW_SLOWA_KLUCZOWE, TW_UWAGI, TW_ROK_URODZIN, TW_ROK_ZGONU, TW_LICZBA_ZAPISOW, TW_ADNOTACJE, TW_TRANSLITERACJE)
-colnames(PBL_tworcy) <- c("TW_TWORCA_ID", "TW_NAZWISKO", "TW_IMIE", "TW_DZ_DZIAL_ID", "DZ_NAZWA", "TW_NAZW_WLASCIWE", "TW_PSEUDONIMY", "TW_DATA_URODZIN", "TW_DATA_ZGONU", "TW_ROCZNIKI_PBL", "TW_SLOWA_KLUCZOWE", "TW_UWAGI", "TW_ROK_URODZIN", "TW_ROK_ZGONU", "TW_LICZBA_ZAPISOW", "TW_ADNOTACJE", "TW_TRANSLITERACJE")
-PBL_tworcy <- PBL_tworcy %>%
-  mutate(nazwa = ifelse(is.na(TW_IMIE),as.character(TW_NAZWISKO),paste(TW_NAZWISKO,TW_IMIE, sep = "")),
-         nazwa = str_to_lower(str_replace_all(nazwa, "\\W", "")),
-         nazwa = str_replace_all(str_to_lower(nazwa), "\\W", ""),
-         TW_DZ_DZIAL_ID = as.numeric(TW_DZ_DZIAL_ID))
-
-PBL_autorzy <- dbReadTable(PBL,'PBL_AUTORZY') %>%
-  mutate(nazwa = ifelse(is.na(AM_IMIE),as.character(AM_NAZWISKO),paste(AM_NAZWISKO,AM_IMIE, sep = "")),
-         nazwa = str_to_lower(str_replace_all(nazwa, "\\W", "")),
-         nazwa = str_replace_all(str_to_lower(nazwa), "\\W", "")) %>%
-  filter(nazwa != "nana")
-
-PBL_wspoltworcy <- dbReadTable(PBL,'PBL_OSOBY') %>%
-  mutate(nazwa_prosta = str_replace_all(str_to_lower(ifelse(is.na(OS_IMIE),as.character(OS_NAZWISKO),paste(OS_NAZWISKO,OS_IMIE, sep = ""))), "\\W", "")) %>%
-  filter(nazwa_prosta !="nana")
-
-PBL_funkcje <- sheets_read(ss = "1htn_L6REs3GdG1xSiGHIfr6MJvjmmU_kVGxiMZtCV24", sheet = "Arkusz1")
-
-PBL_wydawnictwa <- dbReadTable(PBL,'PBL_WYDAWNICTWA') %>%
-  mutate(nazwa_prosta = str_replace_all(str_to_lower(paste(WY_MIASTO, WY_NAZWA)), "\\W", "")) %>%
-  filter(nazwa_prosta !="nana")
-
-PBL_rodzaje_zapisow <- dbReadTable(PBL,'PBL_RODZAJE_ZAPISOW')
-
-BN_PBL_lista_literatur <- sheets_read(ss = "1zbwjnrtWGvbjrQTLMavJcWSu7HfP0I-USNgZ_KWiXjc", sheet = "lista ukd bn") %>%
-  filter(!is.na(ukd_ogolne)) %>%
-  select(3:9) %>%
-  cSplit(.,c("pbl_id","pbl_nazwa","redaktor_dzialu","pbl_id_literatury","pbl_literatura"),sep = "|",direction = "long") %>%
-  filter(!is.na(pbl_id))
-
-PBL_hasla_osobowe <- sheets_read(ss = "1zbwjnrtWGvbjrQTLMavJcWSu7HfP0I-USNgZ_KWiXjc", sheet = "pbl_hasla_osobowe") %>%
-  select(2:5)
-colnames(PBL_hasla_osobowe) <- c("DZ_DZIAL_ID","DZ_NAZWA","redaktor_dzialu","nazwa")
-```
-
-```{r przypisanie redaktorów do przedmiotowej, podmiotowej i antologii}
 bn_ok <- chunk5
 bn_ok <- bn_ok %>%
   mutate(ZA_UWAGI = 1:nrow(.))
@@ -2397,9 +2385,7 @@ bn_ok <- bn_ok %>%
   filter(ZA_UWAGI %notin% slowniki_biograficzne_zle$ZA_UWAGI)
 chunk11 <- bn_ok
 
-```
 
-```{r gatunki + wszystkie kolumny}
 data <- bn_ok %>%
   filter(rodzaj_ksiazki=="podmiotowa")
 #3: tytuł
@@ -2531,7 +2517,7 @@ bn_final[bn_final==""] <- NA
 bn_final <- bn_final[, colSums(is.na(bn_final)) != nrow(bn_final)]
 
 write.xlsx(bn_final, paste("C:/Users/",employee_name,"/Desktop/",import_year,"_bn_ks_do_libri.xlsx",sep = ""),sheetName = "gotowe")
-
+}
 
 ```
 
