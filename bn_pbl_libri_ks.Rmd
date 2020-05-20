@@ -208,80 +208,80 @@ bn_ks <- read.csv2(paste("C:/Users/",employee_name,"/Downloads/bn_ks_",import_ye
   mutate(X245 = str_replace_all(X245," \\/ \\$c"," /$c"),
          BN_URL = paste("https://katalogi.bn.org.pl/discovery/fulldisplay?docid=alma",as.character(X009),"&context=L&vid=48OMNIS_NLOP:48OMNIS_NLOP&lang=pl",sep = ""),
          BN_URL = str_replace(BN_URL,"88&","66&"))
-if (import_year == 2018) {
-bn_ks <- bn_ks %>% 
-  select(-2,-3,-4,-5,-6)
-}
-
-### przenieść kolejnych autorów z 700 do pola 100
-marc_field_700 <- bn_ks %>%
-  select(id,X700)%>%
-  filter(X700!="") %>%
-  mutate(X700=str_replace_all(X700,"(^|\\|)","~\\1")) %>%
-  cSplit(.,"X700",sep = "~",direction = "long") %>%
-  filter(X700!="") %>%
-  mutate(X700=str_remove_all(X700,"^\\|")) %>%
-  mutate(indicator = str_replace_all(X700,"(^.*?)(\\$.*)","\\1"))
-subfield_list<- str_extract_all(bn_ks$X700,"\\$.")
-subfield_list<- unique(unlist(subfield_list))
-empty_table<- data.frame(matrix(ncol = length(subfield_list),nrow = lengths(marc_field_700)[1]))
-colnames(empty_table) <-subfield_list
-marc_field_700<-cbind(marc_field_700,empty_table)
-subfield_list_char <- paste("(",subfield_list,")",sep = "")
-subfield_list_char <- str_replace_all(subfield_list_char,"\\$","\\\\$")
-x <- 1:length(subfield_list)
-
-for (i in x) {
-  progress(match(i,x), max.value = length(x)) 
-  marc_field_700$X700 <- str_replace(marc_field_700$X700,subfield_list_char[i],"|\\1")
-}
-for (i in x) {
-  progress(match(i,x), max.value = length(x)) 
-  subfield_list_char2 <- str_replace_all(subfield_list,"\\$","\\\\$")
-  string_a <- "(^)(.*?\\|"
-  string_b <- subfield_list_char2[i]
-  string_c <- ")(.*?)(\\,{0,1})((\\|\\$)(.*)|$)"
-  string <- paste(string_a,string_b,string_c,sep = "")
-  marc_field_700[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_700$X700),str_replace_all(gsub(string,"\\3",marc_field_700$X700),"\\${2}.", "~"),NA)
-}
-
-marc_field_700 <- marc_field_700 %>%
-  filter(is.na(`$e`)&is.na(`$t`)) %>%
-  select(id, X700) %>%
-  mutate(drugi_autor = str_remove_all(X700,"\\|")) %>%
-  select(id,drugi_autor)
-
-drugi_autor <- bn_ks %>%
-  full_join(.,marc_field_700,by = "id") %>%
-  select(id,X100,X700,drugi_autor) %>%
-  group_by(id) %>%
-  mutate(X100 = ifelse(!is.na(drugi_autor),str_remove(paste(X100,paste(drugi_autor,collapse = "|"),sep = "|"),"^\\|"),as.character(X100)),
-         drugi_autor = list(drugi_autor)) %>%
-  ungroup() %>%
-  unique()
-  
-x <- 1:length(drugi_autor$id)
-for (i in x) {
-  tryCatch({
-  progress(match(i,x), max.value = length(x))
-  y <- 1:lengths(drugi_autor$drugi_autor[i])
-  for (j in y) {
-    drugi_autor$X700[i] <- ifelse(is.na(drugi_autor$drugi_autor[i]),as.character(drugi_autor$X700[i]),
-                           ifelse(grepl(str_replace_all(str_replace_all(str_replace_all(str_replace_all(drugi_autor$drugi_autor[i][[1]][j],"\\\\","\\\\\\\\"),"\\$","\\\\$"),"\\(","\\\\("),"\\)","\\\\)"),drugi_autor$X700[i]),str_remove(drugi_autor$X700[i],str_replace_all(str_replace_all(str_replace_all(str_replace_all(drugi_autor$drugi_autor[i][[1]][j],"\\\\","\\\\\\\\"),"\\$","\\\\$"),"\\(","\\\\("),"\\)","\\\\)")),as.character(drugi_autor$X700[i])))
-  }
-  }, error=function(e) {
-  })
-}
-
-drugi_autor <- drugi_autor %>%
-  mutate(X700 = str_replace_all(X700,"(\\|)+","|"),
-         X700 = str_remove(X700,"\\||$"),
-         X700 = ifelse(X700=="|","",as.character(X700))) %>%
-  select(id,X100,X700)
-bn_ks <- bn_ks %>%
-  mutate(X100 = drugi_autor$X100,
-         X700 = drugi_autor$X700)
-##koniec przenosin
+# if (import_year == 2018) {
+# bn_ks <- bn_ks %>% 
+#   select(-2,-3,-4,-5,-6)
+# }
+# 
+# ### przenieść kolejnych autorów z 700 do pola 100
+# marc_field_700 <- bn_ks %>%
+#   select(id,X700)%>%
+#   filter(X700!="") %>%
+#   mutate(X700=str_replace_all(X700,"(^|\\|)","~\\1")) %>%
+#   cSplit(.,"X700",sep = "~",direction = "long") %>%
+#   filter(X700!="") %>%
+#   mutate(X700=str_remove_all(X700,"^\\|")) %>%
+#   mutate(indicator = str_replace_all(X700,"(^.*?)(\\$.*)","\\1"))
+# subfield_list<- str_extract_all(bn_ks$X700,"\\$.")
+# subfield_list<- unique(unlist(subfield_list))
+# empty_table<- data.frame(matrix(ncol = length(subfield_list),nrow = lengths(marc_field_700)[1]))
+# colnames(empty_table) <-subfield_list
+# marc_field_700<-cbind(marc_field_700,empty_table)
+# subfield_list_char <- paste("(",subfield_list,")",sep = "")
+# subfield_list_char <- str_replace_all(subfield_list_char,"\\$","\\\\$")
+# x <- 1:length(subfield_list)
+# 
+# for (i in x) {
+#   progress(match(i,x), max.value = length(x)) 
+#   marc_field_700$X700 <- str_replace(marc_field_700$X700,subfield_list_char[i],"|\\1")
+# }
+# for (i in x) {
+#   progress(match(i,x), max.value = length(x)) 
+#   subfield_list_char2 <- str_replace_all(subfield_list,"\\$","\\\\$")
+#   string_a <- "(^)(.*?\\|"
+#   string_b <- subfield_list_char2[i]
+#   string_c <- ")(.*?)(\\,{0,1})((\\|\\$)(.*)|$)"
+#   string <- paste(string_a,string_b,string_c,sep = "")
+#   marc_field_700[,i+3] <- ifelse(grepl(subfield_list_char2[i],marc_field_700$X700),str_replace_all(gsub(string,"\\3",marc_field_700$X700),"\\${2}.", "~"),NA)
+# }
+# 
+# marc_field_700 <- marc_field_700 %>%
+#   filter(is.na(`$e`)&is.na(`$t`)) %>%
+#   select(id, X700) %>%
+#   mutate(drugi_autor = str_remove_all(X700,"\\|")) %>%
+#   select(id,drugi_autor)
+# 
+# drugi_autor <- bn_ks %>%
+#   full_join(.,marc_field_700,by = "id") %>%
+#   select(id,X100,X700,drugi_autor) %>%
+#   group_by(id) %>%
+#   mutate(X100 = ifelse(!is.na(drugi_autor),str_remove(paste(X100,paste(drugi_autor,collapse = "|"),sep = "|"),"^\\|"),as.character(X100)),
+#          drugi_autor = list(drugi_autor)) %>%
+#   ungroup() %>%
+#   unique()
+#   
+# x <- 1:length(drugi_autor$id)
+# for (i in x) {
+#   tryCatch({
+#   progress(match(i,x), max.value = length(x))
+#   y <- 1:lengths(drugi_autor$drugi_autor[i])
+#   for (j in y) {
+#     drugi_autor$X700[i] <- ifelse(is.na(drugi_autor$drugi_autor[i]),as.character(drugi_autor$X700[i]),
+#                            ifelse(grepl(str_replace_all(str_replace_all(str_replace_all(str_replace_all(drugi_autor$drugi_autor[i][[1]][j],"\\\\","\\\\\\\\"),"\\$","\\\\$"),"\\(","\\\\("),"\\)","\\\\)"),drugi_autor$X700[i]),str_remove(drugi_autor$X700[i],str_replace_all(str_replace_all(str_replace_all(str_replace_all(drugi_autor$drugi_autor[i][[1]][j],"\\\\","\\\\\\\\"),"\\$","\\\\$"),"\\(","\\\\("),"\\)","\\\\)")),as.character(drugi_autor$X700[i])))
+#   }
+#   }, error=function(e) {
+#   })
+# }
+# 
+# drugi_autor <- drugi_autor %>%
+#   mutate(X700 = str_replace_all(X700,"(\\|)+","|"),
+#          X700 = str_remove(X700,"\\||$"),
+#          X700 = ifelse(X700=="|","",as.character(X700))) %>%
+#   select(id,X100,X700)
+# bn_ks <- bn_ks %>%
+#   mutate(X100 = drugi_autor$X100,
+#          X700 = drugi_autor$X700)
+# ##koniec przenosin
 
 
 tworca_i_dzial <- dbGetQuery(PBL,
