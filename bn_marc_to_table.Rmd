@@ -87,6 +87,9 @@ if (nrow(data1)>0) {
     bind_rows(.,data1)
 } 
 }
+
+write.csv2(data_full, file = "C:/Users/User/Desktop/bn_ks_2013-2019_long.csv", row.names = F, na = '', fileEncoding = 'UTF-8')
+
 f.agg <- function(x) paste(unique(x), collapse = "❦")
 data_full_table <- dcast(data_full, id ~ field, value.var="content", fun.aggregate = f.agg)
 #data_full_table <- dcast(data_full, id ~ field, value.var="content")
