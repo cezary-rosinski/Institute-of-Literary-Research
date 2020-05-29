@@ -194,10 +194,12 @@ colnames(PBL_hasla_osobowe) <- c("DZ_DZIAL_ID","DZ_NAZWA","redaktor_dzialu","naz
 roczniki <- 2013:2019
 
 for (import_year in roczniki) {
-
+import_year <- 2013
 #wgranie zbiorów książek
-bn_ks <- read.csv2(paste("C:/Users/",employee_name,"/Downloads/bn_ks_",import_year,".csv",sep = ""), encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
-  mutate(rok = str_sub(X008,8,11)) %>% 
+bn_ks <- read.csv(paste("C:/Users/",employee_name,"/Downloads/bn_ks_",import_year,".csv",sep = ""), encoding = "UTF-8", header = TRUE, stringsAsFactors = FALSE) %>%
+  mutate(rok = str_sub(X008,8,11),
+         id = X009) %>% 
+  select(id, everything()) %>% 
   filter(rok == import_year,
          !grepl("\\\\$aArtykuły|\\\\$Druki ulotne",X380),
          !grepl("\\$aNadbitki i odbitki",X655),
@@ -531,7 +533,6 @@ distance1 <- bn_ok %>%
 count <- as.data.frame(table(distance1$porownanie))
 
 distance1 <- merge(distance1,count,by.x = "porownanie",by.y = "Var1",all.x = TRUE) %>%
-  select(porownanie,Freq,2:155) %>%
   arrange(-Freq,porownanie) %>%
   select(porownanie,Freq,id) %>%
   cSplit(.,"porownanie",sep = "|",direction = "wide") %>% 
