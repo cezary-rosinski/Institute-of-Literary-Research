@@ -329,7 +329,7 @@ bn_ks <- bn_ks %>%
 #Biblia
 biblia <- bn_ks %>% 
   filter(grepl("biblia", X630, ignore.case = TRUE), 
-         grepl("analiza i interpretacja|edycja krytyczna|materiały konferencyjne", X655, ignore.case = TRUE)) %>% 
+         grepl("analiza i interpretacja|edycja krytyczna|materiały konferencyjne|", X655, ignore.case = TRUE)) %>% 
   select(id) %>% 
   mutate(czy_biblia = "tak")
 
